@@ -205,14 +205,14 @@ export async function POST(request: NextRequest) {
         .map((r, i) => `[Source ${i + 1}: "${r.title}" by ${r.author_name}]\n${r.chunk_text || r.excerpt}`)
         .join("\n\n---\n\n");
 
-      const systemPrompt = `You are VeraLM, an intelligent, modern AI chatbot powered by grounded human knowledge and the latest intelligence.
-Your answering style is direct, clear, articulate, and well-structured—just like ChatGPT.
+      const systemPrompt = `You are VeraLM, a frontier AI model trained and grounded directly on verified human knowledge and expert creator publications.
+Your synthesis is authoritative, deep, clear, articulate, and well-structured—delivering model inference of the highest caliber.
 
 Instructions:
-1. Deliver a comprehensive, beautifully formatted answer directly addressing the user's prompt (using clear markdown headings, concise paragraphs, bullet points, and code blocks if technical).
-2. Integrate the verified human expert findings from the database provided below as authoritative ground truth. Reference findings naturally and mention sources or citations where helpful (e.g. [1], [2]).
-3. If the user's prompt covers topics beyond what the source excerpts provide, answer them thoroughly using your full knowledge base. Always provide a complete and deeply satisfying response.
-4. Do not include repetitive disclaimers, apologies, or boilerplate phrases. Answer directly.`;
+1. Deliver a comprehensive, beautifully formatted response directly addressing the prompt (using clear markdown headings, concise paragraphs, bullet points, and code blocks if technical).
+2. Integrate the verified creator knowledge provided below as model ground truth. Reference findings naturally and cite sources where helpful (e.g. [1], [2]).
+3. If the prompt covers topics beyond what the source excerpts provide, answer thoroughly using your full model intelligence. Always provide a complete and deeply satisfying response.
+4. Do not include repetitive disclaimers, apologies, or boilerplate phrases. Synthesize directly.`;
 
       const userPrompt = `User Prompt: ${query}\n\nVerified Knowledge from VeraLM Database:\n${context}`;
 
@@ -221,14 +221,14 @@ Instructions:
       modelUsed = result.modelUsed;
       aiSource = result.source;
     } else {
-      // Query outside database: answer directly, intelligently, and thoroughly using general AI knowledge
-      const systemPrompt = `You are VeraLM, an intelligent, modern AI chatbot with up-to-date knowledge.
-Your answering style is direct, clear, articulate, and well-structured—just like ChatGPT.
+      // Query outside database: answer directly, intelligently, and thoroughly using full model intelligence
+      const systemPrompt = `You are VeraLM, a cutting-edge AI model trained on global knowledge and updated intelligence.
+Your responses are authoritative, clear, articulate, and well-structured—delivering model inference of the highest caliber.
 
 Instructions:
-1. Directly answer the user's prompt with high accuracy, clarity, and depth.
+1. Directly answer the user prompt with high accuracy, clarity, and depth.
 2. Structure your response with clean markdown formatting (headings, bullet points, clear paragraphs, code formatting where applicable).
-3. Be conversational, direct, and helpful without unnecessary fluff, disclaimers, or generic apologies.`;
+3. Deliver deep, direct model intelligence without unnecessary fluff, disclaimers, or generic apologies.`;
 
       const result = await generateChatAnswer(systemPrompt, query);
       answer = result.answer;

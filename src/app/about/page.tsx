@@ -87,9 +87,9 @@ export default function AboutPage() {
                 <Search className="h-6 w-6" />
               </div>
               <span className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">Pillar 3</span>
-              <h3 className="text-xl font-bold mt-1 mb-3">AI Search Engine</h3>
+              <h3 className="text-xl font-bold mt-1 mb-3">Frontier Grounded AI Model</h3>
               <p className="text-sm text-muted-foreground leading-relaxed mb-6">
-                Users query the search engine and receive accurate, hallucination-free answers synthesized strictly from vault articles. Every cited fact attributes revenue back to its human author.
+                Users prompt the VeraLM AI model and receive accurate, hallucination-free intelligence synthesized directly from verified creator publications. Every cited piece of knowledge attributes royalties back to its author.
               </p>
               <ul className="text-xs space-y-2 text-foreground/80">
                 <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-green-500" /> 100% cited answers with sources</li>
@@ -105,10 +105,10 @@ export default function AboutPage() {
       <section className="py-20 bg-muted/30 border-y border-border">
         <div className="container mx-auto px-4 max-w-5xl">
           <div className="max-w-2xl mb-12">
-            <h2 className="text-3xl font-bold tracking-tight mb-4">How Bloggers &amp; Data Providers Earn Royalties</h2>
+            <h2 className="text-3xl font-bold tracking-tight mb-4">How Bloggers &amp; Creators Power the Model</h2>
             <p className="text-muted-foreground leading-relaxed">
-              VeraLM is powered by a sustainable ecosystem. Users receive actual, verified, latest human answers in their AI chat replies for free by viewing sponsored ads. 
-              The revenue generated from these ad impressions goes directly into the Creator Pool, distributing royalties to the bloggers and data providers whose knowledge answered the query.
+              VeraLM is powered by a sustainable knowledge ecosystem. Users receive verified, latest human intelligence in their VeraLM AI model responses for free by viewing sponsored ads. 
+              The revenue generated from these impressions goes directly into the Creator Pool, distributing royalties to the authors whose knowledge directly powered the model's answer.
             </p>
           </div>
 

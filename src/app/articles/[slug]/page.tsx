@@ -126,24 +126,24 @@ export default async function ArticlePreviewPage({ params, searchParams }: Props
             <div className="space-y-2">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-semibold">
                 <Lock className="h-3.5 w-3.5" />
-                Proprietary Knowledge Vault
+                Proprietary AI Model Knowledge Base
               </span>
               <h1 className="text-2xl font-bold tracking-tight">Article Access Restricted</h1>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Articles in the VeraLM knowledge base are protected from outside search engines and scrapers.
-                Knowledge sources can only be viewed when cited in direct response to a question you asked in the AI Chat.
+                Articles in the VeraLM knowledge base train and ground the proprietary VeraLM AI Model.
+                Knowledge sources can only be viewed when cited in direct response to a query you prompted to the model.
               </p>
             </div>
 
             <div className="p-4 rounded-xl bg-card border border-border text-left space-y-2 text-xs text-muted-foreground">
               <div className="flex items-center gap-2 font-medium text-foreground">
                 <BookOpen className="h-4 w-4 text-primary" />
-                How to view verified sources:
+                How to view verified model sources:
               </div>
               <p>
-                1. Ask VeraLM any question in the AI Chat.<br />
-                2. When the agent uses verified knowledge to answer, it provides an authentic citation link.<br />
-                3. Click &quot;View Source&quot; in the citation to inspect the verified evidence.
+                1. Prompt the VeraLM AI Model on any topic.<br />
+                2. When the model utilizes verified creator knowledge to synthesize answers, it provides an authentic citation link.<br />
+                3. Click &quot;View Source&quot; in the citation to inspect the verified training data.
               </p>
             </div>
 
@@ -151,7 +151,7 @@ export default async function ArticlePreviewPage({ params, searchParams }: Props
               <Link href="/">
                 <Button className="w-full sm:w-auto gap-2">
                   <Search className="h-4 w-4" />
-                  Ask in AI Chat
+                  Prompt VeraLM Model
                 </Button>
               </Link>
               <Link href="/creators">
@@ -211,7 +211,7 @@ export default async function ArticlePreviewPage({ params, searchParams }: Props
               className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
-              Back to AI Chat
+              Back to VeraLM Model
             </Link>
           </div>
 
@@ -268,15 +268,15 @@ export default async function ArticlePreviewPage({ params, searchParams }: Props
               <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto mb-3">
                 <MessageSquare className="h-5 w-5" />
               </div>
-              <h3 className="text-base font-semibold mb-1">Continue Chatting About This Source</h3>
+              <h3 className="text-base font-semibold mb-1">Query the VeraLM AI Model on This Topic</h3>
               <p className="text-xs text-muted-foreground max-w-md mx-auto mb-6">
-                Ask our AI chatbot follow-up questions. All answers remain grounded in verified expert sources.
+                Prompt the VeraLM AI model with follow-up questions. All answers are synthesized directly from verified model knowledge.
               </p>
               <div className="flex justify-center gap-3">
                 <Link href={`/?q=${encodeURIComponent(displayTitle)}`}>
                   <Button className="gap-2">
                     <Sparkles className="h-4 w-4" />
-                    Ask Follow-up in AI Chat
+                    Prompt VeraLM Model
                   </Button>
                 </Link>
                 <Link href="/creators/apply">

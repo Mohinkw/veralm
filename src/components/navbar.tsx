@@ -29,7 +29,7 @@ export function Navbar({ activePage }: { activePage?: string }) {
                 : 'text-muted-foreground hover:text-foreground hover:bg-accent'
             }`}
           >
-            AI Chat
+            AI Model
           </Link>
           <Link
             href="/about"

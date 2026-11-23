@@ -344,8 +344,8 @@ export default function AIChatPage() {
             </div>
             <p className="text-[11px] text-muted-foreground leading-tight">
               {mode === 'creator'
-                ? 'Publish articles, view citations, and earn royalties from your data.'
-                : 'Free AI chatbot with verified human knowledge.'}
+                ? 'Contribute content to train and ground the VeraLM AI model, earning royalties.'
+                : 'Frontier AI model trained and grounded on verified human creator knowledge.'}
             </p>
           </div>
         </div>
@@ -543,10 +543,10 @@ export default function AIChatPage() {
                   <Sparkles className="h-6 w-6" />
                 </div>
                 <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
-                  What's on the agenda today?
+                  VeraLM AI Model
                 </h1>
                 <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                  Ask anything—I provide direct, verified answers powered by expert creator knowledge.
+                  Trained and grounded directly on verified human creator publications. Pure model intelligence with zero hallucinations.
                 </p>
               </div>
 
@@ -562,7 +562,7 @@ export default function AIChatPage() {
                     onChange={handleTextareaChange}
                     onKeyDown={handleKeyDown}
                     rows={1}
-                    placeholder="Ask VeraLM anything…"
+                    placeholder="Prompt the VeraLM AI Model…"
                     disabled={loading}
                     className="flex-1 resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none leading-relaxed max-h-[200px] overflow-y-auto disabled:opacity-50 py-1"
                   />
