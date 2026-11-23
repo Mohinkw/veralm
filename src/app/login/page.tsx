@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Sparkles, ArrowRight, Lock, Mail, AlertCircle, CheckCircle } from 'lucide-react';
+import { Sparkles, ArrowRight, Lock, Mail, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
@@ -12,7 +12,6 @@ export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'creator' | 'admin'>('creator');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,7 +26,7 @@ export default function LoginPage() {
       setError(error.message || 'Unable to sign in. Check your credentials.');
       return;
     }
-    router.push(role === 'admin' ? '/admin' : '/');
+    router.push('/');
   };
 
   const handleGoogleSignIn = async () => {
@@ -36,31 +35,12 @@ export default function LoginPage() {
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback?next=${
-            role === 'admin' ? '/admin' : '/'
-          }`,
+          redirectTo: `${window.location.origin}/auth/callback?next=/`,
         },
       });
       if (oauthError) setError(oauthError.message);
     } catch (err: any) {
       setError(err?.message || 'Failed to initialize Google sign-in.');
-    }
-  };
-
-  const handleAppleSignIn = async () => {
-    setError(null);
-    try {
-      const { error: oauthError } = await supabase.auth.signInWithOAuth({
-        provider: 'apple',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback?next=${
-            role === 'admin' ? '/admin' : '/'
-          }`,
-        },
-      });
-      if (oauthError) setError(oauthError.message);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to initialize Apple sign-in.');
     }
   };
 
@@ -80,38 +60,16 @@ export default function LoginPage() {
       {/* Main Container */}
       <main className="flex-1 flex items-center justify-center p-6">
         <div className="w-full max-w-md bg-card border border-border rounded-2xl p-8 shadow-sm">
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary/10 text-primary mb-4">
+          <div className="text-center mb-6">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary/10 text-primary mb-3">
               <Lock className="h-6 w-6" />
             </div>
             <h1 className="text-2xl font-bold tracking-tight">Welcome Back</h1>
-            <p className="text-sm text-muted-foreground mt-1">Sign in to your VeraLM account</p>
-          </div>
-
-          {/* Role selector */}
-          <div className="flex p-1 bg-muted rounded-lg mb-6 text-sm font-medium">
-            <button
-              type="button"
-              onClick={() => setRole('creator')}
-              className={`flex-1 py-1.5 rounded-md transition-all ${
-                role === 'creator' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Creator Portal
-            </button>
-            <button
-              type="button"
-              onClick={() => setRole('admin')}
-              className={`flex-1 py-1.5 rounded-md transition-all ${
-                role === 'admin' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Administrator
-            </button>
+            <p className="text-xs text-muted-foreground mt-1">Sign in to your VeraLM account</p>
           </div>
 
           {error && (
-            <div className="mb-6 p-4 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-center gap-2">
+            <div className="mb-4 p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-xs text-destructive flex items-center gap-2">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{error}</span>
             </div>
@@ -155,7 +113,7 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground">Email Address</label>
+              <label className="text-xs font-semibold text-foreground">Email Address</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -164,14 +122,14 @@ export default function LoginPage() {
                   placeholder="you@domain.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="pl-9"
+                  className="pl-9 h-9 text-sm"
                 />
               </div>
             </div>
 
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-foreground">Password</label>
+                <label className="text-xs font-semibold text-foreground">Password</label>
                 <a href="#" className="text-xs text-primary hover:underline">Forgot password?</a>
               </div>
               <div className="relative">
@@ -182,7 +140,7 @@ export default function LoginPage() {
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="pl-9"
+                  className="pl-9 h-9 text-sm"
                 />
               </div>
             </div>
@@ -192,56 +150,6 @@ export default function LoginPage() {
               <ArrowRight className="h-4 w-4 ml-2" />
             </Button>
           </form>
-
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-border"></div>
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground">Demo Access</span>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full text-xs"
-              onClick={() => {
-                setEmail('user@veralm.com');
-                setPassword('password123');
-                router.push('/');
-              }}
-            >
-              Continue as User (AI Chat) →
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full text-xs"
-              onClick={() => {
-                setEmail('demo@creator.com');
-                setPassword('password123');
-                setRole('creator');
-                router.push('/creators/dashboard');
-              }}
-            >
-              Continue as Demo Creator →
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full text-xs"
-              onClick={() => {
-                setEmail('admin@veralm.com');
-                setPassword('admin123');
-                setRole('admin');
-                router.push('/admin');
-              }}
-            >
-              Continue as Demo Admin →
-            </Button>
-          </div>
         </div>
       </main>
 
