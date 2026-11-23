@@ -22,10 +22,30 @@ export async function requireCreator(request: NextRequest) {
   if ('error' in auth) return auth;
   const { data: account } = await auth.db.from('users').select('is_active').eq('id', auth.user.id).maybeSingle();
   if (account && account.is_active === false) return { error: NextResponse.json({ error: 'Account disabled.' }, { status: 403 }) } as Fail;
-  const { data: profile, error } = await auth.db.from('creator_profiles')
+  let { data: profile, error } = await auth.db.from('creator_profiles')
     .select('id, is_active').eq('user_id', auth.user.id).maybeSingle();
   if (error) return { error: NextResponse.json({ error: 'Could not load creator profile.' }, { status: 500 }) } as Fail;
-  if (!profile) return { error: NextResponse.json({ error: 'Creator profile not found. Complete the creator application.' }, { status: 404 }) } as Fail;
+  if (!profile) {
+    // Universal account: auto-create creator profile if missing
+    const displayName = auth.user.email?.split('@')[0] || 'Creator';
+    const slugBase = displayName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'creator';
+    const slug = `${slugBase}-${auth.user.id.slice(0, 8)}`;
+    const { data: newProfile } = await auth.db
+      .from('creator_profiles')
+      .insert({
+        user_id: auth.user.id,
+        display_name: displayName,
+        slug,
+        bio: 'VeraLM Verified Knowledge Contributor',
+        primary_categories: ['Technology'],
+        onboarding_completed: true,
+        is_active: true,
+      })
+      .select('id, is_active')
+      .maybeSingle();
+    if (newProfile) profile = newProfile;
+  }
+  if (!profile) return { error: NextResponse.json({ error: 'Creator profile not found.' }, { status: 404 }) } as Fail;
   if (!profile.is_active) return { error: NextResponse.json({ error: 'Creator account suspended.' }, { status: 403 }) } as Fail;
   return { ...auth, creatorId: profile.id as string };
 }

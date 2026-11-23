@@ -13,12 +13,12 @@ export function CreatorFab() {
       {expanded && (
         <div className="mb-1 flex flex-col items-end gap-2 animate-in fade-in-0 slide-in-from-bottom-2 duration-200">
           <Link
-            href="/creators/apply"
+            href="/creators/articles/new"
             onClick={() => setExpanded(false)}
             className="flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium shadow-lg hover:bg-primary/90 transition-all"
           >
             <PenLine className="h-4 w-4" />
-            Become a Creator
+            Submit Article
           </Link>
           <Link
             href="/creators/dashboard"
@@ -26,7 +26,7 @@ export function CreatorFab() {
             className="flex items-center gap-2 rounded-full bg-card border border-border text-foreground px-4 py-2.5 text-sm font-medium shadow-lg hover:bg-accent transition-all"
           >
             <DollarSign className="h-4 w-4 text-green-500" />
-            Creator Dashboard
+            Creator Studio
           </Link>
         </div>
       )}

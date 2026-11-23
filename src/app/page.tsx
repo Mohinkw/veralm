@@ -525,10 +525,10 @@ export default function AIChatPage() {
             ) : (
               <Link
                 href="/creators/profile"
-                className="p-1.5 rounded-xl hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-                title="Profile"
+                className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold hover:ring-2 hover:ring-primary transition-all"
+                title={`Profile: ${user.name || user.email}`}
               >
-                <User className="h-4 w-4" />
+                {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
               </Link>
             )}
           </div>

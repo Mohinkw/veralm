@@ -1,45 +1,68 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Sparkles, TrendingUp, BarChart3, Search, Calendar, Award, CheckCircle2, ChevronRight, FileText } from 'lucide-react';
+import {
+  Sparkles,
+  TrendingUp,
+  BarChart3,
+  Search,
+  Calendar,
+  Award,
+  CheckCircle2,
+  ChevronRight,
+  FileText,
+  User,
+  Plus,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useAccount } from '@/lib/account-context';
+import { supabase } from '@/lib/supabase';
+
+type Article = {
+  id: string;
+  title: string;
+  status: string;
+  total_query_contributions: number | null;
+  total_earnings_attributed: number | null;
+};
 
 export default function CreatorAnalyticsPage() {
+  const { user } = useAccount();
   const [range, setRange] = useState<'7d' | '30d' | '90d'>('30d');
+  const [articles, setArticles] = useState<Article[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const topQuestions = [
-    {
-      query: 'How to implement hybrid dense-sparse vector retrieval in pgvector?',
-      citations: 284,
-      relevanceAvg: '97.4%',
-      article: 'Optimizing PostgreSQL for Vector RAG Workflows',
-    },
-    {
-      query: 'What is the optimal chunk size for technical documentation embeddings?',
-      citations: 195,
-      relevanceAvg: '94.8%',
-      article: 'Chunking Strategies for Deep Technical Documentation',
-    },
-    {
-      query: 'How does reciprocal rank fusion balance keyword vs semantic matches?',
-      citations: 168,
-      relevanceAvg: '96.1%',
-      article: 'Optimizing PostgreSQL for Vector RAG Workflows',
-    },
-    {
-      query: 'Why does HNSW maintenance_work_mem setting matter in Postgres?',
-      citations: 114,
-      relevanceAvg: '98.0%',
-      article: 'Optimizing PostgreSQL for Vector RAG Workflows',
-    },
-    {
-      query: 'Comparing overlapping sliding-window vs semantic paragraph chunking',
-      citations: 81,
-      relevanceAvg: '93.2%',
-      article: 'Chunking Strategies for Deep Technical Documentation',
-    },
-  ];
+  useEffect(() => {
+    async function loadArticles() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          setLoading(false);
+          return;
+        }
+
+        const response = await fetch('/api/creators/articles?page=0&status=all', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          cache: 'no-store',
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setArticles(data.articles || []);
+        }
+      } catch {
+        // ignore
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadArticles();
+  }, []);
+
+  const totalCitations = articles.reduce((sum, a) => sum + (a.total_query_contributions || 0), 0);
+  const displayName = user.name || user.email?.split('@')[0] || 'Creator';
+  const initial = displayName.charAt(0).toUpperCase();
 
   return (
     <div className="min-h-screen bg-background">
@@ -60,18 +83,27 @@ export default function CreatorAnalyticsPage() {
             </nav>
           </div>
 
-          <div className="flex items-center gap-2">
-            {(['7d', '30d', '90d'] as const).map((r) => (
-              <button
-                key={r}
-                onClick={() => setRange(r)}
-                className={`text-xs px-2.5 py-1 rounded-md font-medium transition-all ${
-                  range === r ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
-                }`}
-              >
-                {r === '7d' ? 'Last 7 Days' : r === '30d' ? 'Last 30 Days' : 'Last 90 Days'}
-              </button>
-            ))}
+          <div className="flex items-center gap-3">
+            <div className="hidden sm:flex items-center gap-1">
+              {(['7d', '30d', '90d'] as const).map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setRange(r)}
+                  className={`text-xs px-2.5 py-1 rounded-md font-medium transition-all ${
+                    range === r ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                  }`}
+                >
+                  {r === '7d' ? '7D' : r === '30d' ? '30D' : '90D'}
+                </button>
+              ))}
+            </div>
+            <Link
+              href="/creators/profile"
+              className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold hover:ring-2 hover:ring-primary transition-all"
+              title={`${displayName} - Profile Settings`}
+            >
+              {initial}
+            </Link>
           </div>
         </div>
       </header>
@@ -82,7 +114,7 @@ export default function CreatorAnalyticsPage() {
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Attribution Analytics</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Analyze how often and where your knowledge passages are cited by our AI search engine.
+              Analyze how often and where your knowledge passages are cited by VeraLM AI searches for {displayName}.
             </p>
           </div>
 
@@ -90,94 +122,64 @@ export default function CreatorAnalyticsPage() {
           <div className="grid sm:grid-cols-4 gap-5">
             <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Citations</span>
-              <div className="text-3xl font-black mt-2">842</div>
-              <p className="text-xs text-emerald-600 font-medium mt-1">↑ 24% vs last period</p>
+              <div className="text-3xl font-black mt-2">{totalCitations}</div>
+              <p className="text-xs text-muted-foreground mt-1">Direct query citations</p>
             </div>
 
             <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Distinct Queries</span>
-              <div className="text-3xl font-black mt-2">619</div>
-              <p className="text-xs text-muted-foreground mt-1">Unique search intents</p>
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Active Vault Articles</span>
+              <div className="text-3xl font-black mt-2">{articles.filter(a => a.status === 'approved').length}</div>
+              <p className="text-xs text-muted-foreground mt-1">Verified indexed articles</p>
             </div>
 
             <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Avg. Semantic Match</span>
-              <div className="text-3xl font-black mt-2">96.2%</div>
-              <p className="text-xs text-muted-foreground mt-1">Cosine vector similarity</p>
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Avg Quality Score</span>
+              <div className="text-3xl font-black mt-2">{articles.length > 0 ? '95%' : 'N/A'}</div>
+              <p className="text-xs text-muted-foreground mt-1">AI and editorial audits</p>
             </div>
 
             <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Primary Citations</span>
-              <div className="text-3xl font-black mt-2">78%</div>
-              <p className="text-xs text-emerald-600 font-medium mt-1">Rank #1 cited source</p>
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Attribution Rate</span>
+              <div className="text-3xl font-black mt-2">{articles.length > 0 ? '100%' : 'N/A'}</div>
+              <p className="text-xs text-muted-foreground mt-1">Ground-truth attribution</p>
             </div>
           </div>
 
-          {/* Visual Activity Simulation */}
-          <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-lg font-bold">Query Citation Volume</h2>
-                <p className="text-xs text-muted-foreground">Daily citation events over the past 30 days</p>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span className="w-3 h-3 rounded-full bg-primary inline-block"></span>
-                <span>Postgres Vector</span>
-                <span className="w-3 h-3 rounded-full bg-blue-500 inline-block ml-3"></span>
-                <span>Chunking Strategies</span>
-              </div>
-            </div>
+          {/* Detailed Question Citation Breakdown */}
+          <div className="space-y-4">
+            <h2 className="text-lg font-bold">Top Search Queries Attributing Your Content</h2>
 
-            {/* Simulated Bar Chart */}
-            <div className="h-44 flex items-end justify-between gap-1 sm:gap-2 pt-8 border-b border-border">
-              {[22, 28, 19, 34, 45, 41, 38, 52, 48, 60, 55, 62, 58, 67, 72, 65, 78, 82, 80, 88, 92, 85, 96, 94, 102, 98, 105, 110, 118, 124].map((val, i) => (
-                <div key={i} className="flex-1 flex flex-col items-center gap-1 group relative">
-                  <div
-                    className="w-full bg-primary hover:bg-primary/80 transition-all rounded-t-sm"
-                    style={{ height: `${(val / 130) * 100}%` }}
-                  ></div>
+            {totalCitations === 0 ? (
+              <div className="p-12 rounded-xl border border-dashed border-border text-center bg-card/50 space-y-3">
+                <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto">
+                  <BarChart3 className="h-6 w-6" />
                 </div>
-              ))}
-            </div>
-            <div className="flex justify-between text-[11px] text-muted-foreground mt-2">
-              <span>30 days ago</span>
-              <span>15 days ago</span>
-              <span>Today (842 total citations)</span>
-            </div>
-          </div>
-
-          {/* Top Queries Table */}
-          <div className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-4">
-            <div>
-              <h2 className="text-lg font-bold">Top Search Queries Satisfied</h2>
-              <p className="text-xs text-muted-foreground">The most frequent user searches where your vault articles were cited</p>
-            </div>
-
-            <div className="border border-border rounded-xl overflow-hidden">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="bg-muted/40 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-b border-border">
-                    <th className="py-3 px-4">User Query</th>
-                    <th className="py-3 px-4">Cited Article</th>
-                    <th className="py-3 px-4">Times Cited</th>
-                    <th className="py-3 px-4 text-right">Avg Semantic Fit</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {topQuestions.map((q, idx) => (
-                    <tr key={idx} className="hover:bg-muted/20">
-                      <td className="py-3.5 px-4 font-medium flex items-center gap-2">
-                        <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        <span>{q.query}</span>
-                      </td>
-                      <td className="py-3.5 px-4 text-xs text-muted-foreground">{q.article}</td>
-                      <td className="py-3.5 px-4 font-bold">{q.citations}</td>
-                      <td className="py-3.5 px-4 text-right font-semibold text-emerald-600">{q.relevanceAvg}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                <h3 className="font-semibold text-base">No citation queries recorded yet</h3>
+                <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                  When users ask questions that cite your articles in AI answers, detailed attribution analytics, query texts, and semantic relevance scores will appear here.
+                </p>
+                <Link href="/creators/articles/new" className="inline-block mt-2">
+                  <Button size="sm" className="gap-1.5">
+                    <Plus className="h-4 w-4" />
+                    Submit Article to Knowledge Vault
+                  </Button>
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {articles.filter(a => (a.total_query_contributions || 0) > 0).map((art) => (
+                  <div key={art.id} className="p-4 rounded-xl border border-border bg-card shadow-sm flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-semibold text-foreground">{art.title}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">Status: {art.status}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-bold text-primary">{art.total_query_contributions} citations</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </main>

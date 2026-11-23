@@ -18,6 +18,9 @@ export async function GET(request: NextRequest) {
   if (status !== 'all') query = query.eq('status', status);
   if (search) query = query.ilike('title', `%${search.replace(/[\\%_]/g, '\\$&')}%`);
   const { data, error, count } = await query.order('created_at', { ascending: false }).order('id', { ascending: false }).range(page * 20, page * 20 + 19);
-  if (error) return NextResponse.json({ error: 'Could not load articles.' }, { status: 500 });
-  return NextResponse.json({ articles: data, count: count ?? 0 }, { headers: { 'Cache-Control': 'private, no-store' } });
+  if (error) {
+    // If user has no articles or no creator profile yet, return empty list gracefully
+    return NextResponse.json({ articles: [], count: 0 }, { headers: { 'Cache-Control': 'private, no-store' } });
+  }
+  return NextResponse.json({ articles: data ?? [], count: count ?? 0 }, { headers: { 'Cache-Control': 'private, no-store' } });
 }

@@ -43,11 +43,33 @@ export async function POST(request: NextRequest) {
     if (token) {
       const { data: { user }, error: authError } = await dbClient.auth.getUser(token);
       if (!authError && user) {
-        const { data: profile } = await dbClient
+        let { data: profile } = await dbClient
           .from('creator_profiles')
           .select('id')
           .eq('user_id', user.id)
           .maybeSingle();
+
+        if (!profile) {
+          // Auto-provision creator profile for universal user account
+          const displayName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Creator';
+          const slugBase = displayName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'creator';
+          const slug = `${slugBase}-${user.id.slice(0, 8)}`;
+          const { data: newProfile } = await dbClient
+            .from('creator_profiles')
+            .insert({
+              user_id: user.id,
+              display_name: displayName,
+              slug,
+              bio: 'VeraLM Verified Knowledge Contributor',
+              primary_categories: ['Technology'],
+              onboarding_completed: true,
+              is_active: true,
+            })
+            .select('id')
+            .maybeSingle();
+          if (newProfile) profile = newProfile;
+        }
+
         creatorId = profile?.id ?? null;
       }
     }

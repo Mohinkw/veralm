@@ -3,10 +3,11 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { Sparkles, Plus, Search, CheckCircle2, Clock, XCircle, AlertCircle, Eye } from 'lucide-react';
+import { Sparkles, Plus, Search, CheckCircle2, Clock, XCircle, AlertCircle, Eye, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { formatCurrency, formatRelativeTime } from '@/lib/utils';
+import { useAccount } from '@/lib/account-context';
 
 type Article = {
   id: string; title: string; status: string; word_count: number | null;
@@ -17,6 +18,7 @@ type Article = {
 };
 
 export default function CreatorArticlesPage() {
+  const { user } = useAccount();
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -25,6 +27,9 @@ export default function CreatorArticlesPage() {
   const [count, setCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  const displayName = user.name || user.email?.split('@')[0] || 'Creator';
+  const initial = displayName.charAt(0).toUpperCase();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -82,12 +87,21 @@ export default function CreatorArticlesPage() {
             </nav>
           </div>
 
-          <Link href="/creators/articles/new">
-            <Button size="sm" className="gap-1.5">
-              <Plus className="h-4 w-4" />
-              Submit Article
-            </Button>
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link href="/creators/articles/new">
+              <Button size="sm" className="gap-1.5 text-xs">
+                <Plus className="h-4 w-4" />
+                Submit Article
+              </Button>
+            </Link>
+            <Link
+              href="/creators/profile"
+              className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold hover:ring-2 hover:ring-primary transition-all"
+              title={`${displayName} - Profile Settings`}
+            >
+              {initial}
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -152,10 +166,37 @@ export default function CreatorArticlesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border text-sm">
-                {loading || error || articles.length === 0 ? (
+                {loading ? (
                   <tr>
                     <td colSpan={6} className="text-center py-12 text-muted-foreground">
-                      {loading ? 'Loading articles…' : error || 'No articles match your current filter.'}
+                      Loading articles…
+                    </td>
+                  </tr>
+                ) : error ? (
+                  <tr>
+                    <td colSpan={6} className="text-center py-12 text-muted-foreground">
+                      <div className="space-y-3">
+                        <p>{error}</p>
+                        {error.includes('Sign in') && (
+                          <Link href="/login">
+                            <Button size="sm" variant="outline">Sign In</Button>
+                          </Link>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ) : articles.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="text-center py-12 text-muted-foreground">
+                      <div className="space-y-3">
+                        <p>No articles found for your account. Submit verified articles to start earning royalties.</p>
+                        <Link href="/creators/articles/new">
+                          <Button size="sm" className="gap-1.5">
+                            <Plus className="h-4 w-4" />
+                            Submit Your First Article
+                          </Button>
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ) : (
