@@ -177,7 +177,7 @@ export async function POST(request: NextRequest) {
         ? `Here are verified findings from our knowledge base on this topic:\n\n${vaultResults
             .map((r, i) => `### ${i + 1}. ${r.title}\n*By ${r.author_name}*\n\n${r.chunk_text || r.excerpt}`)
             .join("\n\n")}`
-        : `I'm VeraLM, an AI chatbot built to provide direct, grounded answers. AI keys are currently in demo mode.`;
+        : `I couldn't locate specific verified entries matching "${query}" in our directory, and external AI services are currently connecting. Please try your question again in a moment.`;
 
       return NextResponse.json({
         answer: fallbackAnswer,
