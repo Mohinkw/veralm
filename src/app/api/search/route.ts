@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase, createServerClient } from "@/lib/supabase";
 import { generateSessionId } from "@/lib/utils";
 import { generateChatAnswer, generateEmbedding, hasAnyAI } from "@/lib/ai-providers";
+import { createCitationToken } from "@/lib/citation-token";
 
 // ---- Rate limiting (in-memory, per session) ----
 const RATE_LIMIT_WINDOW = 60 * 1000;
@@ -80,14 +81,16 @@ function keywordMatch(query: string): typeof VAULT_DEMO {
   );
 }
 
-function mapCitation(r: any, i: number) {
+function mapCitation(r: any, i: number, sessionId?: string) {
   const slug = r.slug || slugify(r.title) || r.article_id;
+  const citationToken = createCitationToken(slug, sessionId);
   return {
     index: i + 1,
     article_id: r.article_id,
     article_title: r.title,
     slug,
-    url: `/articles/${slug}`,
+    url: `/articles/${slug}?token=${citationToken}`,
+    citation_token: citationToken,
     author_name: r.author_name || "Domain Expert",
     approved_at: r.approved_at || new Date().toISOString(),
     freshness_status: r.freshness_status || "current",
@@ -95,13 +98,15 @@ function mapCitation(r: any, i: number) {
   };
 }
 
-function mapArticle(r: any) {
+function mapArticle(r: any, sessionId?: string) {
   const slug = r.slug || slugify(r.title) || r.article_id;
+  const citationToken = createCitationToken(slug, sessionId);
   return {
     article_id: r.article_id,
     title: r.title,
     slug,
-    url: `/articles/${slug}`,
+    url: `/articles/${slug}?token=${citationToken}`,
+    citation_token: citationToken,
     author_slug: r.author_slug || "author",
     author_name: r.author_name || "Domain Expert",
     approved_at: r.approved_at || new Date().toISOString(),
@@ -181,8 +186,8 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         answer: fallbackAnswer,
-        citations: vaultResults.map(mapCitation),
-        articles_used: vaultResults.map(mapArticle),
+        citations: vaultResults.map((r, i) => mapCitation(r, i, sessionId)),
+        articles_used: vaultResults.map((r) => mapArticle(r, sessionId)),
         latency_ms: Date.now() - startTime,
         was_cached: false,
         vault_source: vaultSource,
@@ -233,8 +238,8 @@ Instructions:
 
     return NextResponse.json({
       answer,
-      citations: vaultResults.map(mapCitation),
-      articles_used: vaultResults.map(mapArticle),
+      citations: vaultResults.map((r, i) => mapCitation(r, i, sessionId)),
+      articles_used: vaultResults.map((r) => mapArticle(r, sessionId)),
       latency_ms: Date.now() - startTime,
       was_cached: false,
       vault_source: vaultSource,

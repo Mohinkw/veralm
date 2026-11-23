@@ -762,7 +762,7 @@ export default function AIChatPage() {
                                             </p>
                                           </div>
                                           <Link
-                                            href={`/articles/${art.slug || art.article_id}`}
+                                            href={art.url || `/articles/${art.slug || art.article_id}`}
                                             className="shrink-0 inline-flex items-center gap-1 text-xs text-primary hover:underline font-medium"
                                           >
                                             <ExternalLink className="h-3 w-3" />

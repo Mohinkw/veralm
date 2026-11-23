@@ -1,19 +1,11 @@
 import { MetadataRoute } from 'next';
-import { db } from '@/db/client';
-import { articles } from '@/db/schema';
-import { eq } from 'drizzle-orm';
 
-const DEMO_SLUGS = [
-  'optimising-postgresql-for-vector-search-at-scale',
-  'rag-pipeline-best-practices',
-  'choosing-the-right-llm-for-enterprise-applications',
-];
-
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+export default function sitemap(): MetadataRoute.Sitemap {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://veralm.com';
 
-  // Core static marketing and product pages
-  const staticRoutes: MetadataRoute.Sitemap = [
+  // Only public marketing, product, and legal pages are submitted to search engines.
+  // Proprietary articles are strictly excluded to preserve knowledge exclusivity for VeraLM's agent.
+  return [
     {
       url: baseUrl,
       lastModified: new Date(),
@@ -69,44 +61,4 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.3,
     },
   ];
-
-  // Dynamically index approved articles from DB (with fallback to demo articles)
-  const articleRoutes: MetadataRoute.Sitemap = [];
-  try {
-    const dbArticles = await db
-      .select({
-        slug: articles.slug,
-        updatedAt: articles.updatedAt,
-      })
-      .from(articles)
-      .where(eq(articles.status, 'approved'))
-      .limit(1000);
-
-    if (dbArticles && dbArticles.length > 0) {
-      for (const a of dbArticles) {
-        articleRoutes.push({
-          url: `${baseUrl}/articles/${a.slug}`,
-          lastModified: a.updatedAt || new Date(),
-          changeFrequency: 'weekly',
-          priority: 0.85,
-        });
-      }
-    }
-  } catch (err) {
-    console.warn('[sitemap] Failed to query articles from database, falling back to demo slugs', err);
-  }
-
-  // Fallback to demo articles if database query was empty or offline during static generation
-  if (articleRoutes.length === 0) {
-    for (const slug of DEMO_SLUGS) {
-      articleRoutes.push({
-        url: `${baseUrl}/articles/${slug}`,
-        lastModified: new Date(),
-        changeFrequency: 'weekly',
-        priority: 0.85,
-      });
-    }
-  }
-
-  return [...staticRoutes, ...articleRoutes];
 }
