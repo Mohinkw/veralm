@@ -2,9 +2,13 @@ import OpenAI from "openai";
 import { db } from "@/db/client";
 import { articleEmbeddings } from "@/db/schema";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+function getOpenAIClient(): OpenAI {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error("Missing OPENAI_API_KEY environment variable");
+  }
+  return new OpenAI({ apiKey });
+}
 
 /**
  * Split text into chunks for embedding
@@ -28,6 +32,7 @@ export function chunkText(text: string, chunkSize: number = 2000, overlap: numbe
  * Generate embedding for a text chunk using OpenAI's text-embedding-3-small
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
+  const openai = getOpenAIClient();
   const response = await openai.embeddings.create({
     model: "text-embedding-3-small",
     input: text,
