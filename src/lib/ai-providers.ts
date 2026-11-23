@@ -19,6 +19,7 @@ const GEMINI_CANDIDATES = Array.from(
   new Set([
     DEFAULT_GEMINI_MODEL,
     "gemini-flash-lite-latest",
+    "gemini-3.5-flash",
     "gemini-3.5-flash-lite",
   ])
 );
