@@ -7,13 +7,16 @@ import { Sparkles, ArrowRight, UserCheck, ShieldCheck, Mail, Lock, User, AlertCi
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
+import { useAccount } from '@/lib/account-context';
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { setMode } = useAccount();
+
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [accountType, setAccountType] = useState<'reader' | 'creator'>('creator');
+  const [accountType, setAccountType] = useState<'user' | 'creator'>('user');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -25,6 +28,8 @@ export default function RegisterPage() {
     setSuccessMessage(null);
 
     try {
+      setMode(accountType);
+
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
@@ -44,15 +49,15 @@ export default function RegisterPage() {
       }
 
       if (data?.session) {
-        // Immediate session created (auto-confirm enabled)
+        // Immediate session
         if (accountType === 'creator') {
-          router.push('/creators/apply');
+          router.push('/creators/dashboard');
         } else {
-          router.push('/search');
+          router.push('/');
         }
       } else {
-        // Email confirmation required
-        setSuccessMessage('Registration successful! Please check your email inbox to confirm your account.');
+        setSuccessMessage('Registration successful! Check your email to confirm, or sign in directly.');
+        setTimeout(() => router.push('/'), 2000);
       }
     } catch (err: any) {
       setError(err?.message || 'Failed to create account. Please try again.');
@@ -64,11 +69,12 @@ export default function RegisterPage() {
   const handleGoogleSignUp = async () => {
     setError(null);
     try {
+      setMode(accountType);
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: `${window.location.origin}/auth/callback?next=${
-            accountType === 'creator' ? '/creators/apply' : '/search'
+            accountType === 'creator' ? '/creators/dashboard' : '/'
           }`,
         },
       });
@@ -94,42 +100,50 @@ export default function RegisterPage() {
       {/* Main Container */}
       <main className="flex-1 flex items-center justify-center p-6">
         <div className="w-full max-w-md bg-card border border-border rounded-2xl p-8 shadow-sm">
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary/10 text-primary mb-4">
+          <div className="text-center mb-6">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary/10 text-primary mb-3">
               <Sparkles className="h-6 w-6" />
             </div>
             <h1 className="text-2xl font-bold tracking-tight">Create an Account</h1>
-            <p className="text-sm text-muted-foreground mt-1">Join the verified human AI knowledge model</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              One account for AI Chat & Creator Royalties. Switch mode anytime.
+            </p>
           </div>
 
-          {/* Account type choice */}
+          {/* Account type choice - Default is User */}
           <div className="grid grid-cols-2 gap-3 mb-6">
             <button
               type="button"
+              onClick={() => setAccountType('user')}
+              className={`p-3 rounded-xl border text-left transition-all ${
+                accountType === 'user'
+                  ? 'border-primary bg-primary/5 text-foreground ring-1 ring-primary'
+                  : 'border-border text-muted-foreground hover:border-foreground/30'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <User className="h-4 w-4 text-primary" />
+                <span className="text-[10px] uppercase font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded">Default</span>
+              </div>
+              <div className="font-semibold text-sm">User Account</div>
+              <div className="text-xs text-muted-foreground mt-0.5">Use AI Chatbot with verified human knowledge</div>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setAccountType('creator')}
-              className={`p-3.5 rounded-xl border text-left transition-all ${
+              className={`p-3 rounded-xl border text-left transition-all ${
                 accountType === 'creator'
                   ? 'border-primary bg-primary/5 text-foreground ring-1 ring-primary'
                   : 'border-border text-muted-foreground hover:border-foreground/30'
               }`}
             >
-              <UserCheck className="h-5 w-5 text-primary mb-1.5" />
-              <div className="font-semibold text-sm">Creator / Author</div>
-              <div className="text-xs text-muted-foreground mt-0.5">Publish articles & earn 90% royalties</div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setAccountType('reader')}
-              className={`p-3.5 rounded-xl border text-left transition-all ${
-                accountType === 'reader'
-                  ? 'border-primary bg-primary/5 text-foreground ring-1 ring-primary'
-                  : 'border-border text-muted-foreground hover:border-foreground/30'
-              }`}
-            >
-              <ShieldCheck className="h-5 w-5 text-primary mb-1.5" />
-              <div className="font-semibold text-sm">Search User</div>
-              <div className="text-xs text-muted-foreground mt-0.5">Explore grounded answers from experts</div>
+              <div className="flex items-center justify-between mb-1">
+                <UserCheck className="h-4 w-4 text-green-500" />
+                <span className="text-[10px] uppercase font-bold text-green-600 bg-green-500/10 px-1.5 py-0.5 rounded">Earn</span>
+              </div>
+              <div className="font-semibold text-sm">Creator Account</div>
+              <div className="text-xs text-muted-foreground mt-0.5">Publish articles & earn royalties from data</div>
             </button>
           </div>
 
@@ -160,7 +174,7 @@ export default function RegisterPage() {
             Continue with Google
           </button>
 
-          <div className="relative my-5">
+          <div className="relative my-4">
             <div className="absolute inset-0 flex items-center">
               <span className="w-full border-t border-border" />
             </div>
@@ -170,83 +184,81 @@ export default function RegisterPage() {
           </div>
 
           {error && (
-            <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-center gap-2">
+            <div className="mb-4 p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-xs text-destructive flex items-center gap-2">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
           {successMessage && (
-            <div className="mb-4 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-sm flex items-center gap-2">
+            <div className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
               <CheckCircle className="h-4 w-4 shrink-0" />
               <span>{successMessage}</span>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground">Full Name</label>
+          <form onSubmit={handleSubmit} className="space-y-3.5">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-foreground">Full Name</label>
               <div className="relative">
-                <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   type="text"
                   required
-                  placeholder="Alex Rivers"
+                  placeholder="Your Name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="pl-9"
+                  className="pl-9 h-9 text-sm"
                 />
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground">Email Address</label>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-foreground">Email Address</label>
               <div className="relative">
-                <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   type="email"
                   required
-                  placeholder="alex@domain.com"
+                  placeholder="you@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="pl-9"
+                  className="pl-9 h-9 text-sm"
                 />
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground">Password</label>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-foreground">Password</label>
               <div className="relative">
-                <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   type="password"
                   required
-                  placeholder="At least 6 characters"
+                  placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="pl-9"
+                  className="pl-9 h-9 text-sm"
                 />
               </div>
             </div>
 
             <Button type="submit" disabled={isLoading} className="w-full mt-2">
-              {isLoading ? 'Creating Account...' : accountType === 'creator' ? 'Continue to Creator Application' : 'Create Free Account'}
+              {isLoading ? 'Creating Account...' : 'Create Account'}
               <ArrowRight className="h-4 w-4 ml-2" />
             </Button>
           </form>
 
-          <p className="text-center text-xs text-muted-foreground mt-6">
-            By signing up, you agree to our{' '}
-            <Link href="/terms" className="text-primary hover:underline">Terms of Service</Link>
-            {' '}and{' '}
-            <Link href="/privacy" className="text-primary hover:underline">Privacy Policy</Link>.
+          <p className="text-center text-xs text-muted-foreground mt-4">
+            By signing up, you agree to VeraLM's{' '}
+            <Link href="/terms" className="text-primary hover:underline">Terms</Link> &{' '}
+            <Link href="/privacy" className="text-primary hover:underline">Privacy</Link>.
           </p>
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-border py-4 px-6 text-center text-xs text-muted-foreground">
-        © 2026 VeraLM Inc. The Grounded AI Knowledge Model. All rights reserved.
+      <footer className="py-4 text-center text-xs text-muted-foreground border-t border-border">
+        © 2026 VeraLM Inc. Grounded AI Chatbot. All rights reserved.
       </footer>
     </div>
   );

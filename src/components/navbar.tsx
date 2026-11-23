@@ -17,14 +17,14 @@ export function Navbar({ activePage }: { activePage?: string }) {
         {/* Nav links */}
         <div className="flex items-center gap-1 sm:gap-4">
           <Link
-            href="/search"
+            href="/"
             className={`text-sm font-medium px-3 py-1.5 rounded-md transition-colors ${
-              activePage === 'search'
+              activePage === 'chat' || activePage === 'search'
                 ? 'text-primary bg-primary/10'
                 : 'text-muted-foreground hover:text-foreground hover:bg-accent'
             }`}
           >
-            Ask AI
+            AI Chat
           </Link>
           <Link
             href="/about"

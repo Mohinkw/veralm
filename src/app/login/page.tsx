@@ -27,7 +27,7 @@ export default function LoginPage() {
       setError(error.message || 'Unable to sign in. Check your credentials.');
       return;
     }
-    router.push(role === 'admin' ? '/admin' : '/creators/dashboard');
+    router.push(role === 'admin' ? '/admin' : '/');
   };
 
   const handleGoogleSignIn = async () => {
@@ -37,7 +37,7 @@ export default function LoginPage() {
         provider: 'google',
         options: {
           redirectTo: `${window.location.origin}/auth/callback?next=${
-            role === 'admin' ? '/admin' : '/creators/dashboard'
+            role === 'admin' ? '/admin' : '/'
           }`,
         },
       });
@@ -191,6 +191,18 @@ export default function LoginPage() {
               variant="outline"
               className="w-full text-xs"
               onClick={() => {
+                setEmail('user@veralm.com');
+                setPassword('password123');
+                router.push('/');
+              }}
+            >
+              Continue as User (AI Chat) →
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full text-xs"
+              onClick={() => {
                 setEmail('demo@creator.com');
                 setPassword('password123');
                 setRole('creator');
@@ -218,7 +230,7 @@ export default function LoginPage() {
 
       {/* Footer */}
       <footer className="py-4 text-center text-xs text-muted-foreground border-t border-border">
-        © 2026 VeraLM Inc. AI-Powered Verified Knowledge Search. All rights reserved.
+        © 2026 VeraLM Inc. Grounded AI Chatbot. All rights reserved.
       </footer>
     </div>
   );

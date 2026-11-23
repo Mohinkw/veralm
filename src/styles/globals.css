@@ -28,32 +28,48 @@
   }
 
   .dark {
-    /* Dark mode — ChatGPT-style dark palette */
-    --background: 0 0% 13%;        /* #212121 */
-    --foreground: 0 0% 93%;        /* #ececec */
-    --card: 0 0% 9%;               /* #171717 (sidebar) */
+    /* Dark mode*/
+    --background: 0 0% 13%;
+    /* #212121 */
+    --foreground: 0 0% 93%;
+    /* #ececec */
+    --card: 0 0% 9%;
+    /* #171717 (sidebar) */
     --card-foreground: 0 0% 93%;
-    --popover: 0 0% 15%;           /* dropdown */
+    --popover: 0 0% 15%;
+    /* dropdown */
     --popover-foreground: 0 0% 93%;
-    --primary: 217.2 91.2% 59.8%;  /* blue accent */
+    --primary: 217.2 91.2% 59.8%;
+    /* blue accent */
     --primary-foreground: 0 0% 5%;
-    --secondary: 0 0% 17%;         /* #2d2d2d */
+    --secondary: 0 0% 17%;
+    /* #2d2d2d */
     --secondary-foreground: 0 0% 93%;
-    --muted: 0 0% 18%;             /* #2f2f2f (input bg) */
-    --muted-foreground: 0 0% 56%;  /* #8e8e8e */
-    --accent: 0 0% 20%;            /* hover state */
+    --muted: 0 0% 18%;
+    /* #2f2f2f (input bg) */
+    --muted-foreground: 0 0% 56%;
+    /* #8e8e8e */
+    --accent: 0 0% 20%;
+    /* hover state */
     --accent-foreground: 0 0% 100%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 25%;            /* #3f3f3f */
-    --input: 0 0% 18%;             /* #2f2f2f */
+    --border: 0 0% 25%;
+    /* #3f3f3f */
+    --input: 0 0% 18%;
+    /* #2f2f2f */
     --ring: 217 91% 60%;
   }
 }
 
 @layer base {
-  * { @apply border-border; }
-  body { @apply bg-background text-foreground; }
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
 
   /* Light-mode overrides for the dark-hex chat styles */
   :root .light-input {
@@ -61,9 +77,11 @@
     border-color: #e5e5e5 !important;
     color: #0d0d0d !important;
   }
+
   :root .light-textarea {
     color: #0d0d0d !important;
   }
+
   :root .light-textarea::placeholder {
     color: #6b6b6b !important;
   }
@@ -73,9 +91,19 @@
 @layer utilities {
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: rgba(255,255,255,.12) transparent;
+    scrollbar-color: rgba(255, 255, 255, .12) transparent;
   }
-  .scrollbar-thin::-webkit-scrollbar { width: 4px; }
-  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
-  .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 4px; }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, .12);
+    border-radius: 4px;
+  }
 }

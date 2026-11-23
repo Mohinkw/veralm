@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import '@/styles/globals.css';
 import { ThemeProvider } from '@/components/theme-provider';
+import { AccountProvider } from '@/lib/account-context';
 
 export const metadata: Metadata = {
   title: 'VeraLM - The AI Model Powered by Real Human Answers',
@@ -63,7 +64,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           enableSystem
           disableTransitionOnChange
         >
-          {children}
+          <AccountProvider>
+            {children}
+          </AccountProvider>
         </ThemeProvider>
       </body>
     </html>
