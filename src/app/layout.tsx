@@ -2,8 +2,9 @@ import type { Metadata, Viewport } from 'next';
 import '@/styles/globals.css';
 import { ThemeProvider } from '@/components/theme-provider';
 import { AccountProvider } from '@/lib/account-context';
+import { getSiteUrl } from '@/lib/utils';
 
-const siteUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://veralm.com';
+const siteUrl = getSiteUrl();
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

@@ -1,7 +1,8 @@
 import { MetadataRoute } from 'next';
+import { getSiteUrl } from '@/lib/utils';
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://veralm.com';
+  const baseUrl = getSiteUrl();
 
   // Only public marketing, product, and legal pages are submitted to search engines.
   // Proprietary articles are strictly excluded to preserve knowledge exclusivity for VeraLM's agent.
