@@ -1,12 +1,19 @@
 import type { Metadata, Viewport } from 'next';
 import '@/styles/globals.css';
-
-const inter = { variable: '--font-sans' };
+import { ThemeProvider } from '@/components/theme-provider';
 
 export const metadata: Metadata = {
   title: 'VeraLM - The AI Model Powered by Real Human Answers',
-  description: 'Get direct AI chat replies grounded in actual, latest, human-verified answers. Free for users via sponsored ads, distributing royalties to expert bloggers and data providers.',
-  keywords: ['AI chat', 'verified human answers', 'data provider royalties', 'RAG AI model', 'creator economy', 'expert knowledge'],
+  description:
+    'Get direct AI chat replies grounded in actual, latest, human-verified answers. Free for users via sponsored ads, distributing royalties to expert bloggers and data providers.',
+  keywords: [
+    'AI chat',
+    'verified human answers',
+    'data provider royalties',
+    'RAG AI model',
+    'creator economy',
+    'expert knowledge',
+  ],
   authors: [{ name: 'VeraLM' }],
   creator: 'VeraLM',
   publisher: 'VeraLM',
@@ -16,16 +23,15 @@ export const metadata: Metadata = {
     locale: 'en_US',
     url: 'https://veralm.com',
     title: 'VeraLM - The AI Model Powered by Real Human Answers',
-    description: 'Get direct AI chat replies grounded in actual, latest, human-verified answers. Free for users via sponsored ads, distributing royalties to expert bloggers and data providers.',
+    description:
+      'Get direct AI chat replies grounded in actual, latest, human-verified answers.',
     siteName: 'VeraLM',
   },
   twitter: {
     card: 'summary_large_image',
     title: 'VeraLM - The AI Model Powered by Real Human Answers',
-    description: 'Get direct AI chat replies grounded in actual, latest, human-verified answers. Free for users via sponsored ads, distributing royalties to expert bloggers and data providers.',
-  },
-  verification: {
-    google: 'google-site-verification-code',
+    description:
+      'Get direct AI chat replies grounded in actual, latest, human-verified answers.',
   },
 };
 
@@ -39,19 +45,26 @@ export const viewport: Viewport = {
   maximumScale: 1,
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="anonymous"
+        />
       </head>
-      <body className={`${inter.variable} font-sans antialiased`}>
-        {children}
+      <body className="font-sans antialiased">
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );

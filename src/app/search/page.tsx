@@ -1,10 +1,21 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import { Search, Loader2, Sparkles, ExternalLink, Copy, ThumbsUp, ThumbsDown, Flag } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import {
+  Send,
+  Loader2,
+  Sparkles,
+  ExternalLink,
+  Copy,
+  ThumbsUp,
+  ThumbsDown,
+  RotateCcw,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
+import { Navbar } from '@/components/navbar';
+import { CreatorFab } from '@/components/creator-fab';
 
 interface Citation {
   article_id: string;
@@ -15,317 +26,423 @@ interface Citation {
   excerpt: string;
 }
 
+interface ArticleUsed {
+  article_id: string;
+  title: string;
+  author_slug: string;
+  author_name: string;
+  approved_at: string;
+  freshness_status: string;
+}
+
 interface SearchResponse {
   answer: string;
   citations: Citation[];
-  articles_used: Array<{
-    article_id: string;
-    title: string;
-    author_slug: string;
-    author_name: string;
-    approved_at: string;
-    freshness_status: string;
-  }>;
+  articles_used: ArticleUsed[];
   latency_ms: number;
   was_cached: boolean;
   query_id: string;
 }
 
-export default function SearchPage() {
-  const [query, setQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [response, setResponse] = useState<SearchResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
+interface Message {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  response?: SearchResponse;
+  error?: string;
+  feedback?: 1 | -1;
+  copied?: boolean;
+  sourcesOpen?: boolean;
+}
+
+const SUGGESTED = [
+  'Best budget camera for video 2026?',
+  'Roth IRA vs 401k for young professionals',
+  'How to optimize React re-renders',
+  'Best hiking trails in Colorado',
+  'Python async/await patterns explained',
+];
+
+export default function ChatPage() {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
   const [sessionId] = useState(() => crypto.randomUUID());
+  const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!query.trim() || isLoading) return;
+  const scrollToBottom = useCallback(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, []);
 
-    setIsLoading(true);
-    setError(null);
-    setResponse(null);
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, scrollToBottom]);
 
-    try {
-      const res = await fetch('/api/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: query.trim(), session_id: sessionId }),
-      });
+  // Auto-resize textarea
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
+  }, [input]);
 
-      const data = await res.json();
+  const ask = useCallback(
+    async (query: string) => {
+      if (!query.trim() || loading) return;
+      setInput('');
 
-      if (!res.ok) {
-        throw new Error(data.error || 'Search failed');
+      const userMsg: Message = { id: crypto.randomUUID(), role: 'user', content: query };
+      const assistantId = crypto.randomUUID();
+      const assistantMsg: Message = { id: assistantId, role: 'assistant', content: '', sourcesOpen: false };
+
+      setMessages((prev) => [...prev, userMsg, assistantMsg]);
+      setLoading(true);
+
+      try {
+        const res = await fetch('/api/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: query.trim(), session_id: sessionId }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || 'Search failed');
+
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId
+              ? { ...m, content: data.answer, response: data }
+              : m
+          )
+        );
+      } catch (err) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId
+              ? { ...m, error: err instanceof Error ? err.message : 'An error occurred' }
+              : m
+          )
+        );
+      } finally {
+        setLoading(false);
+        setTimeout(scrollToBottom, 100);
       }
+    },
+    [loading, sessionId, scrollToBottom]
+  );
 
-      setResponse(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-    } finally {
-      setIsLoading(false);
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    ask(input);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      ask(input);
     }
   };
 
-  const handleFeedback = async (queryId: string, rating: 1 | -1) => {
+  const sendFeedback = async (queryId: string, msgId: string, rating: 1 | -1) => {
+    setMessages((prev) =>
+      prev.map((m) => (m.id === msgId ? { ...m, feedback: rating } : m))
+    );
     try {
-      const result = await fetch('/api/search/feedback', {
+      await fetch('/api/search/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query_id: queryId, rating }),
       });
-      if (!result.ok) throw new Error('Unable to record feedback');
-    } catch (err) {
-      console.error('Feedback failed:', err);
+    } catch {}
+  };
+
+  const copyText = async (text: string, msgId: string) => {
+    await navigator.clipboard.writeText(text);
+    setMessages((prev) =>
+      prev.map((m) => (m.id === msgId ? { ...m, copied: true } : m))
+    );
+    setTimeout(
+      () =>
+        setMessages((prev) =>
+          prev.map((m) => (m.id === msgId ? { ...m, copied: false } : m))
+        ),
+      2000
+    );
+  };
+
+  const toggleSources = (msgId: string) =>
+    setMessages((prev) =>
+      prev.map((m) => (m.id === msgId ? { ...m, sourcesOpen: !m.sourcesOpen } : m))
+    );
+
+  const freshnessColor = (status: string) => {
+    switch (status) {
+      case 'current':
+        return 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300';
+      case 'aging':
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300';
+      case 'outdated':
+        return 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300';
+      default:
+        return 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300';
     }
   };
 
-  const copyAnswer = async () => {
-    if (!response) return;
-    await navigator.clipboard.writeText(response.answer);
-  };
-
-  const suggestedQueries = [
-    'Best budget camera for video 2026?',
-    'Roth IRA vs 401k for young professionals',
-    'How to optimize React re-renders',
-    'Best hiking trails in Colorado',
-    'Python async/await patterns explained',
-  ];
+  const isEmpty = messages.length === 0;
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Navigation */}
-      <nav className="border-b border-border sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <a href="/" className="flex items-center gap-2 font-bold text-xl">
-            <Sparkles className="h-6 w-6 text-primary" />
-            <span>VeraLM</span>
-          </a>
-          <div className="flex items-center gap-6">
-            <a href="/search" className="text-sm font-medium text-primary">Search</a>
-            <a href="/creators" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">For Creators</a>
-            <a href="/about" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">How It Works</a>
-            <a href="/login" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Sign In</a>
-            <a href="/register" className="bg-primary text-primary-foreground px-4 py-2 rounded-md text-sm font-medium hover:bg-primary/90 transition-colors">Get Started</a>
+    <div className="flex flex-col h-screen bg-background">
+      <Navbar activePage="search" />
+
+      {/* Chat area */}
+      <main className="flex-1 overflow-y-auto">
+        {/* Welcome / empty state */}
+        {isEmpty && (
+          <div className="flex flex-col items-center justify-center min-h-[70vh] px-4 text-center">
+            <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 ring-1 ring-primary/20">
+              <Sparkles className="h-8 w-8 text-primary" />
+            </div>
+            <h1 className="text-2xl font-bold mb-2">How can I help you?</h1>
+            <p className="text-muted-foreground max-w-sm mb-10">
+              Ask anything — I answer using real, verified human knowledge from expert creators.
+            </p>
+            <div className="grid gap-2 w-full max-w-xl">
+              {SUGGESTED.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => ask(s)}
+                  className="text-left px-4 py-3 rounded-xl border border-border bg-card hover:bg-accent hover:border-primary/40 transition-all text-sm text-foreground"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-      </nav>
+        )}
 
-      {/* Search Section */}
-      <section className="py-16 lg:py-24">
-        <div className="container mx-auto px-4">
-          <div className="max-w-3xl mx-auto">
-            {/* Search Header */}
-            <div className="text-center mb-10">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold mb-3">
-                <Sparkles className="h-3.5 w-3.5" />
-                <span>The AI Model with Real Human Truth</span>
-              </div>
-              <h1 className="text-3xl lg:text-4xl font-bold mb-3">Ask the Grounded AI Model</h1>
-              <p className="text-base text-muted-foreground max-w-xl mx-auto">
-                Direct AI chat replies synthesized from actual, latest, human-verified knowledge. 
-                Free to ask via non-intrusive ads that pay royalties directly to expert data providers.
-              </p>
-            </div>
-
-            {/* Search Form */}
-            <form onSubmit={handleSubmit} className="mb-8">
-              <div className="relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                <textarea
-                  ref={textareaRef}
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Ask a question... e.g., How do I optimize PostgreSQL for vector search?"
-                  className="w-full min-h-[60px] pl-12 pr-12 py-4 text-lg border border-input bg-background rounded-xl placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-                  rows={1}
-                  disabled={isLoading}
-                />
-                {isLoading && (
-                  <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 text-primary animate-spin" />
+        {/* Messages */}
+        {!isEmpty && (
+          <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
+            {messages.map((msg) => (
+              <div key={msg.id}>
+                {/* User bubble */}
+                {msg.role === 'user' && (
+                  <div className="flex justify-end">
+                    <div className="max-w-[80%] rounded-2xl rounded-tr-sm bg-primary text-primary-foreground px-5 py-3 text-sm leading-relaxed shadow-sm">
+                      {msg.content}
+                    </div>
+                  </div>
                 )}
-              </div>
-              <div className="flex items-center justify-between mt-4">
-                <Button type="submit" size="xl" disabled={isLoading || !query.trim()} className="w-full sm:w-auto">
-                  {isLoading ? 'Synthesizing...' : 'Ask AI'}
-                </Button>
-              </div>
-            </form>
 
-            {/* Suggested Queries */}
-            <div className="mb-10">
-              <p className="text-sm text-muted-foreground mb-3 text-center">Try one of these:</p>
-              <div className="flex flex-wrap justify-center gap-2">
-                {suggestedQueries.map((q, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => {
-                      setQuery(q);
-                      textareaRef.current?.focus();
-                    }}
-                    className="px-3 py-1.5 text-sm rounded-lg border border-border bg-background hover:bg-accent transition-colors"
-                  >
-                    {q}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Error Display */}
-            {error && (
-              <div className="mb-8 p-4 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive">
-                {error}
-              </div>
-            )}
-
-            {/* Response */}
-            {response && (
-              <div className="space-y-6">
-                {/* Answer */}
-                <div className="bg-card border border-border rounded-xl p-6">
-                  <div className="prose prose-lg max-w-none mb-6">
-                    {response.answer.split('\n').map((paragraph, i) => (
-                      <p key={i} className="whitespace-pre-wrap">{paragraph}</p>
-                    ))}
-                  </div>
-
-                  {/* Sponsored Ad & Creator Royalty Notice */}
-                  <div className="mb-4 p-3.5 rounded-lg bg-muted/40 border border-border/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="bg-primary/20 text-primary font-bold px-2 py-0.5 rounded text-[10px] uppercase tracking-wider">
-                        Sponsored
-                      </span>
-                      <span className="text-muted-foreground">
-                        Ad-supported free access • Viewers fund royalties for cited human creators
-                      </span>
+                {/* Assistant bubble */}
+                {msg.role === 'assistant' && (
+                  <div className="flex gap-3">
+                    <div className="shrink-0 mt-1 h-8 w-8 rounded-full bg-primary/10 ring-1 ring-primary/20 flex items-center justify-center">
+                      <Sparkles className="h-4 w-4 text-primary" />
                     </div>
-                    <div className="flex items-center gap-1.5 text-emerald-500 font-medium shrink-0">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      <span>Creator Royalty Credited</span>
-                    </div>
-                  </div>
+                    <div className="flex-1 min-w-0">
+                      {/* Loading shimmer */}
+                      {!msg.content && !msg.error && (
+                        <div className="space-y-2 mt-1">
+                          <div className="h-4 w-3/4 rounded bg-muted animate-pulse" />
+                          <div className="h-4 w-full rounded bg-muted animate-pulse" />
+                          <div className="h-4 w-5/6 rounded bg-muted animate-pulse" />
+                        </div>
+                      )}
 
-                  {/* Meta & Actions */}
-                  <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border pt-4">
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                        {response.was_cached ? 'Cached' : 'Generated'}
-                      </span>
-                      <span>{response.latency_ms}ms</span>
-                      <span>{response.citations.length} source{response.citations.length !== 1 ? 's' : ''}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button variant="ghost" size="sm" onClick={copyAnswer}>
-                        <Copy className="h-4 w-4 mr-1" />
-                        Copy
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleFeedback(response.query_id, 1)}>
-                        <ThumbsUp className="h-4 w-4 mr-1" />
-                        Helpful
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleFeedback(response.query_id, -1)}>
-                        <ThumbsDown className="h-4 w-4 mr-1" />
-                        Not Helpful
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleFeedback(response.query_id, -1)}>
-                        <Flag className="h-4 w-4 mr-1" />
-                        Report
-                      </Button>
-                    </div>
-                  </div>
-                </div>
+                      {/* Error */}
+                      {msg.error && (
+                        <div className="text-sm text-destructive bg-destructive/10 rounded-xl px-4 py-3 border border-destructive/20">
+                          {msg.error}
+                        </div>
+                      )}
 
-                {/* Sources */}
-                <div className="bg-card border border-border rounded-xl p-6">
-                  <h3 className="font-semibold mb-4 flex items-center gap-2">
-                    <Sparkles className="h-5 w-5 text-primary" />
-                    Sources Used
-                  </h3>
-                  <div className="space-y-4">
-                    {response.articles_used.map((article, index) => (
-                      <article key={article.article_id} className="p-4 rounded-lg border border-border hover:border-primary/50 transition-colors">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-2">
-                              <span className="text-sm font-medium text-primary">{index + 1}.</span>
-                              <h4 className="font-medium truncate">{article.title}</h4>
-                              <span className={cn(
-                                'px-2 py-0.5 text-xs rounded font-medium',
-                                article.freshness_status === 'current' && 'bg-green-100 text-green-800',
-                                article.freshness_status === 'aging' && 'bg-yellow-100 text-yellow-800',
-                                article.freshness_status === 'outdated' && 'bg-red-100 text-red-800',
-                                article.freshness_status === 'flagged' && 'bg-orange-100 text-orange-800',
-                              )}>
-                                {article.freshness_status}
+                      {/* Answer */}
+                      {msg.content && (
+                        <>
+                          <div className="prose prose-sm dark:prose-invert max-w-none text-foreground leading-relaxed whitespace-pre-wrap">
+                            {msg.content}
+                          </div>
+
+                          {/* Action bar */}
+                          <div className="flex items-center gap-1 mt-3 flex-wrap">
+                            {/* Copy */}
+                            <button
+                              onClick={() => copyText(msg.content, msg.id)}
+                              title="Copy answer"
+                              className={cn(
+                                'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                                msg.copied
+                                  ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                              )}
+                            >
+                              <Copy className="h-3.5 w-3.5" />
+                              {msg.copied ? 'Copied!' : 'Copy'}
+                            </button>
+
+                            {/* Thumbs */}
+                            {msg.response && (
+                              <>
+                                <button
+                                  onClick={() => sendFeedback(msg.response!.query_id, msg.id, 1)}
+                                  title="Good answer"
+                                  className={cn(
+                                    'inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs transition-colors',
+                                    msg.feedback === 1
+                                      ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                      : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                                  )}
+                                >
+                                  <ThumbsUp className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => sendFeedback(msg.response!.query_id, msg.id, -1)}
+                                  title="Bad answer"
+                                  className={cn(
+                                    'inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs transition-colors',
+                                    msg.feedback === -1
+                                      ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                                      : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                                  )}
+                                >
+                                  <ThumbsDown className="h-3.5 w-3.5" />
+                                </button>
+                              </>
+                            )}
+
+                            {/* Latency badge */}
+                            {msg.response && (
+                              <span className="ml-auto text-xs text-muted-foreground">
+                                {msg.response.was_cached ? '⚡ cached' : `${msg.response.latency_ms}ms`}
                               </span>
-                            </div>
-                            <p className="text-sm text-muted-foreground">
-                              By {article.author_name} • {formatRelativeTime(article.approved_at)}
-                            </p>
+                            )}
                           </div>
-                          <a
-                            href={`/articles/${article.author_slug}/${article.article_id}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1 text-sm text-primary hover:underline flex-shrink-0"
-                          >
-                            <ExternalLink className="h-3.5 w-3.5" />
-                            View Article
-                          </a>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                </div>
 
-                {/* Citations Detail */}
-                {response.citations.length > 0 && (
-                  <details className="group">
-                    <summary className="cursor-pointer p-4 rounded-lg border border-border bg-muted/50 flex items-center justify-between">
-                      <span className="font-medium">View Detailed Citations ({response.citations.length})</span>
-                      <span className="text-sm text-muted-foreground">Click to expand</span>
-                    </summary>
-                    <div className="mt-4 space-y-4 p-4 border-t border-border">
-                      {response.citations.map((citation, index) => (
-                        <div key={citation.article_id} className="p-4 rounded-lg bg-background border border-border">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="text-sm font-medium text-primary">{index + 1}.</span>
-                            <span className="font-medium">{citation.article_title}</span>
-                            <span className="text-sm text-muted-foreground">— {citation.author_name}, {formatRelativeTime(citation.approved_at)}</span>
-                          </div>
-                          <p className="text-sm text-muted-foreground italic border-l-2 border-primary pl-4">
-                            "{citation.excerpt}"
-                          </p>
-                        </div>
-                      ))}
+                          {/* Sources collapsible */}
+                          {msg.response && msg.response.articles_used.length > 0 && (
+                            <div className="mt-4 rounded-xl border border-border overflow-hidden">
+                              <button
+                                onClick={() => toggleSources(msg.id)}
+                                className="w-full flex items-center justify-between px-4 py-3 bg-muted/40 hover:bg-muted/70 transition-colors text-sm font-medium"
+                              >
+                                <span className="flex items-center gap-2">
+                                  <Sparkles className="h-4 w-4 text-primary" />
+                                  {msg.response.articles_used.length} Source
+                                  {msg.response.articles_used.length !== 1 ? 's' : ''}
+                                </span>
+                                {msg.sourcesOpen ? (
+                                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                                ) : (
+                                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                )}
+                              </button>
+
+                              {msg.sourcesOpen && (
+                                <div className="divide-y divide-border">
+                                  {msg.response.articles_used.map((art, i) => (
+                                    <div
+                                      key={art.article_id}
+                                      className="flex items-start justify-between gap-4 px-4 py-3 bg-background hover:bg-accent/40 transition-colors"
+                                    >
+                                      <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <span className="text-xs font-semibold text-primary">
+                                            {i + 1}.
+                                          </span>
+                                          <span className="text-sm font-medium truncate">
+                                            {art.title}
+                                          </span>
+                                          <span
+                                            className={cn(
+                                              'px-1.5 py-0.5 text-xs rounded font-medium',
+                                              freshnessColor(art.freshness_status)
+                                            )}
+                                          >
+                                            {art.freshness_status}
+                                          </span>
+                                        </div>
+                                        <p className="text-xs text-muted-foreground mt-0.5">
+                                          By {art.author_name} &bull; {formatRelativeTime(art.approved_at)}
+                                        </p>
+                                      </div>
+                                      <a
+                                        href={`/articles/${art.author_slug}/${art.article_id}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="shrink-0 inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                                      >
+                                        <ExternalLink className="h-3 w-3" />
+                                        View
+                                      </a>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      )}
                     </div>
-                  </details>
+                  </div>
                 )}
               </div>
-            )}
-
-            {/* Empty State */}
-            {!response && !isLoading && !error && (
-              <div className="text-center py-16 text-muted-foreground">
-                <Sparkles className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p className="text-lg">Enter a question above to get started</p>
-                <p className="text-sm mt-2">Answers are generated from our verified knowledge base</p>
-              </div>
-            )}
+            ))}
+            <div ref={bottomRef} />
           </div>
-        </div>
-      </section>
+        )}
+      </main>
 
-      {/* Footer */}
-      <footer className="border-t border-border py-8">
-        <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          <p>© 2026 VeraLM. Answers from verified expert articles. <a href="/creators/apply" className="text-primary hover:underline">Become a creator</a></p>
-        </div>
-      </footer>
+      {/* Input bar */}
+      <div className="border-t border-border bg-background/95 backdrop-blur p-4">
+        <form
+          onSubmit={handleSubmit}
+          className="max-w-3xl mx-auto flex items-end gap-3 bg-card border border-border rounded-2xl px-4 py-3 shadow-sm focus-within:ring-2 focus-within:ring-primary/40 transition-shadow"
+        >
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            rows={1}
+            placeholder="Ask anything…"
+            disabled={loading}
+            className="flex-1 resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none leading-relaxed max-h-[200px] overflow-y-auto disabled:opacity-50"
+          />
+          <button
+            type="submit"
+            disabled={!input.trim() || loading}
+            aria-label="Send"
+            className="shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+          >
+            {loading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+          </button>
+        </form>
+        {!isEmpty && (
+          <div className="max-w-3xl mx-auto mt-2 flex justify-center">
+            <button
+              onClick={() => setMessages([])}
+              className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <RotateCcw className="h-3 w-3" />
+              New conversation
+            </button>
+          </div>
+        )}
+        <p className="text-center text-xs text-muted-foreground mt-2">
+          Answers powered by verified human expertise.{' '}
+          <a href="/creators/apply" className="text-primary hover:underline">
+            Earn as a creator →
+          </a>
+        </p>
+      </div>
+
+      <CreatorFab />
     </div>
   );
 }

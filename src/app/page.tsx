@@ -1,36 +1,13 @@
 import Link from 'next/link';
 import { Search, Sparkles, Shield, Users, ArrowRight, CheckCircle, BarChart3, Lock, Globe } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Navbar } from '@/components/navbar';
+import { CreatorFab } from '@/components/creator-fab';
 
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-background">
-      {/* Navigation */}
-      <nav className="border-b border-border sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 font-bold text-xl">
-            <Sparkles className="h-6 w-6 text-primary" />
-            <span>VeraLM</span>
-          </Link>
-          <div className="flex items-center gap-6">
-            <Link href="/search" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-              Search
-            </Link>
-            <Link href="/creators" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-              For Creators
-            </Link>
-            <Link href="/about" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-              How It Works
-            </Link>
-            <Link href="/login" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-              Sign In
-            </Link>
-            <Link href="/register" className="bg-primary text-primary-foreground px-4 py-2 rounded-md text-sm font-medium hover:bg-primary/90 transition-colors">
-              Get Started
-            </Link>
-          </div>
-        </div>
-      </nav>
+      <Navbar />
 
       {/* Hero Section */}
       <section className="relative overflow-hidden py-20 lg:py-32">
@@ -357,6 +334,7 @@ export default function HomePage() {
           </div>
         </div>
       </footer>
+      <CreatorFab />
     </div>
   );
 }
