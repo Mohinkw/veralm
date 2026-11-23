@@ -130,9 +130,7 @@ export async function POST(request: NextRequest) {
     // ---- TIER 1: Search verified database knowledge ----
     let vaultResults: any[] = [];
     let vaultSource = "none";
-    const hasSupabase =
-      process.env.NEXT_PUBLIC_SUPABASE_URL &&
-      !process.env.NEXT_PUBLIC_SUPABASE_URL.includes("placeholder");
+    const hasSupabase = true;
 
     if (hasSupabase) {
       try {
