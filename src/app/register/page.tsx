@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Sparkles, ArrowRight, UserCheck, ShieldCheck, Mail, Lock, User, AlertCircle, CheckCircle } from 'lucide-react';
+import { Sparkles, ArrowRight, Mail, Lock, User, AlertCircle, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
@@ -16,7 +16,6 @@ export default function RegisterPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [accountType, setAccountType] = useState<'user' | 'creator'>('user');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -28,7 +27,7 @@ export default function RegisterPage() {
     setSuccessMessage(null);
 
     try {
-      setMode(accountType);
+      setMode('user');
 
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
@@ -36,7 +35,7 @@ export default function RegisterPage() {
         options: {
           data: {
             full_name: name,
-            role: accountType,
+            role: 'user',
           },
           emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
@@ -49,14 +48,9 @@ export default function RegisterPage() {
       }
 
       if (data?.session) {
-        // Immediate session
-        if (accountType === 'creator') {
-          router.push('/creators/dashboard');
-        } else {
-          router.push('/');
-        }
+        router.push('/');
       } else {
-        setSuccessMessage('Registration successful! Check your email to confirm, or sign in directly.');
+        setSuccessMessage('Account created! Check your email to confirm, or sign in.');
         setTimeout(() => router.push('/'), 2000);
       }
     } catch (err: any) {
@@ -69,13 +63,11 @@ export default function RegisterPage() {
   const handleGoogleSignUp = async () => {
     setError(null);
     try {
-      setMode(accountType);
+      setMode('user');
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback?next=${
-            accountType === 'creator' ? '/creators/dashboard' : '/'
-          }`,
+          redirectTo: `${window.location.origin}/auth/callback?next=/`,
         },
       });
       if (oauthError) setError(oauthError.message);
@@ -105,46 +97,9 @@ export default function RegisterPage() {
               <Sparkles className="h-6 w-6" />
             </div>
             <h1 className="text-2xl font-bold tracking-tight">Create an Account</h1>
-            <p className="text-xs text-muted-foreground mt-1">
-              One account for AI Chat & Creator Royalties. Switch mode anytime.
+            <p className="text-xs text-muted-foreground mt-1.5">
+              One universal account for VeraLM AI Chat and Creator Royalties
             </p>
-          </div>
-
-          {/* Account type choice - Default is User */}
-          <div className="grid grid-cols-2 gap-3 mb-6">
-            <button
-              type="button"
-              onClick={() => setAccountType('user')}
-              className={`p-3 rounded-xl border text-left transition-all ${
-                accountType === 'user'
-                  ? 'border-primary bg-primary/5 text-foreground ring-1 ring-primary'
-                  : 'border-border text-muted-foreground hover:border-foreground/30'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-1">
-                <User className="h-4 w-4 text-primary" />
-                <span className="text-[10px] uppercase font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded">Default</span>
-              </div>
-              <div className="font-semibold text-sm">User Account</div>
-              <div className="text-xs text-muted-foreground mt-0.5">Use AI Chatbot with verified human knowledge</div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setAccountType('creator')}
-              className={`p-3 rounded-xl border text-left transition-all ${
-                accountType === 'creator'
-                  ? 'border-primary bg-primary/5 text-foreground ring-1 ring-primary'
-                  : 'border-border text-muted-foreground hover:border-foreground/30'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-1">
-                <UserCheck className="h-4 w-4 text-green-500" />
-                <span className="text-[10px] uppercase font-bold text-green-600 bg-green-500/10 px-1.5 py-0.5 rounded">Earn</span>
-              </div>
-              <div className="font-semibold text-sm">Creator Account</div>
-              <div className="text-xs text-muted-foreground mt-0.5">Publish articles & earn royalties from data</div>
-            </button>
           </div>
 
           {/* Google Sign-in */}
