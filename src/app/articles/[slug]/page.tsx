@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import type { Metadata } from 'next';
 import { Sparkles, ShieldCheck, Lock, Award, BookOpen, MessageSquare, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -45,6 +46,36 @@ const DEMO_ARTICLES: Record<string, { title: string; author: string; excerpt: st
   },
 };
 
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { slug } = await params;
+  const matched = DEMO_ARTICLES[slug.toLowerCase()];
+  const title = matched?.title || slug
+    .split('-')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+  const description = matched?.excerpt || 'Read verified, expert-authored knowledge licensed for the VeraLM AI search and knowledge model.';
+
+  return {
+    title,
+    description,
+    alternates: {
+      canonical: `/articles/${slug}`,
+    },
+    openGraph: {
+      type: 'article',
+      title,
+      description,
+      url: `/articles/${slug}`,
+      siteName: 'VeraLM Knowledge Base',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+    },
+  };
+}
+
 export default async function ArticlePreviewPage({ params }: Props) {
   const { slug } = await params;
 
@@ -56,8 +87,30 @@ export default async function ArticlePreviewPage({ params }: Props) {
   const authorName = matched?.author || 'Domain Expert';
   const excerpt = matched?.excerpt || 'This verified article is part of the VeraLM knowledge database, licensed directly from expert creators.';
 
+  const articleJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'TechArticle',
+    headline: displayTitle,
+    description: excerpt,
+    author: {
+      '@type': 'Person',
+      name: authorName,
+    },
+    publisher: {
+      '@type': 'Organization',
+      name: 'VeraLM',
+      url: 'https://veralm.com',
+    },
+    inLanguage: 'en-US',
+    isAccessibleForFree: true,
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }}
+      />
       {/* Navigation */}
       <nav className="border-b border-border sticky top-0 z-50 bg-background/95 backdrop-blur">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
