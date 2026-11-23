@@ -4,56 +4,78 @@
 
 @layer base {
   :root {
+    /* Light mode — clean white */
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --foreground: 0 0% 5%;
+    --card: 0 0% 98%;
+    --card-foreground: 0 0% 5%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 0 0% 5%;
     --primary: 221.2 83.2% 53.3%;
     --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --secondary: 0 0% 94%;
+    --secondary-foreground: 0 0% 10%;
+    --muted: 0 0% 95%;
+    --muted-foreground: 0 0% 42%;
+    --accent: 0 0% 94%;
+    --accent-foreground: 0 0% 10%;
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
     --ring: 221.2 83.2% 53.3%;
     --radius: 0.5rem;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    /* Dark mode — ChatGPT-style dark palette */
+    --background: 0 0% 13%;        /* #212121 */
+    --foreground: 0 0% 93%;        /* #ececec */
+    --card: 0 0% 9%;               /* #171717 (sidebar) */
+    --card-foreground: 0 0% 93%;
+    --popover: 0 0% 15%;           /* dropdown */
+    --popover-foreground: 0 0% 93%;
+    --primary: 217.2 91.2% 59.8%;  /* blue accent */
+    --primary-foreground: 0 0% 5%;
+    --secondary: 0 0% 17%;         /* #2d2d2d */
+    --secondary-foreground: 0 0% 93%;
+    --muted: 0 0% 18%;             /* #2f2f2f (input bg) */
+    --muted-foreground: 0 0% 56%;  /* #8e8e8e */
+    --accent: 0 0% 20%;            /* hover state */
+    --accent-foreground: 0 0% 100%;
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 25%;            /* #3f3f3f */
+    --input: 0 0% 18%;             /* #2f2f2f */
+    --ring: 217 91% 60%;
   }
 }
 
 @layer base {
-  * {
-    @apply border-border;
+  * { @apply border-border; }
+  body { @apply bg-background text-foreground; }
+
+  /* Light-mode overrides for the dark-hex chat styles */
+  :root .light-input {
+    background-color: #f4f4f4 !important;
+    border-color: #e5e5e5 !important;
+    color: #0d0d0d !important;
   }
-  body {
-    @apply bg-background text-foreground;
+  :root .light-textarea {
+    color: #0d0d0d !important;
   }
+  :root .light-textarea::placeholder {
+    color: #6b6b6b !important;
+  }
+}
+
+/* Thin scrollbar for sidebar recents list */
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,.12) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar { width: 4px; }
+  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 4px; }
 }
