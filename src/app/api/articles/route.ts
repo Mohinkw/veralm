@@ -26,13 +26,16 @@ export async function POST(request: NextRequest) {
       status,
     } = body;
 
-    // Validate required fields
-    if (!title || !content || !category_id || !excerpt) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    // Validate core required fields (title, content, category)
+    if (!title || !content || !category_id) {
+      return NextResponse.json({ error: 'Title, category, and content are required' }, { status: 400 });
     }
 
-    if (content.length < 500) {
-      return NextResponse.json({ error: 'Content must be at least 500 characters' }, { status: 400 });
+    // Auto-generate clean excerpt from content if not explicitly provided
+    const cleanExcerpt = excerpt || content.replace(/^[#*`>\s\n]+/, '').slice(0, 180).trim();
+
+    if (content.length < 200) {
+      return NextResponse.json({ error: 'Content must be at least 200 characters' }, { status: 400 });
     }
 
     // Authenticate user via bearer token or fallback
@@ -165,7 +168,7 @@ export async function POST(request: NextRequest) {
       slug,
       content,
       content_format || 'markdown',
-      excerpt,
+      cleanExcerpt,
       wordCount,
       tags || [],
       author_notes || null,
