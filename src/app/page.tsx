@@ -35,6 +35,7 @@ import { cn, formatRelativeTime } from '@/lib/utils';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { useAccount } from '@/lib/account-context';
 import { MarkdownRenderer } from '@/components/markdown-renderer';
+import { ChatLoadingStatus } from '@/components/chat-loading-status';
 
 /* ─── Types ─────────────────────────────────────────────── */
 interface Citation {
@@ -645,11 +646,7 @@ export default function AIChatPage() {
                         <div className="flex-1 min-w-0">
                           {/* Loading state */}
                           {!msg.content && !msg.error && (
-                            <div className="space-y-2 mt-1">
-                              <div className="h-4 w-3/4 rounded bg-muted animate-pulse" />
-                              <div className="h-4 w-full rounded bg-muted animate-pulse" />
-                              <div className="h-4 w-2/3 rounded bg-muted animate-pulse" />
-                            </div>
+                            <ChatLoadingStatus />
                           )}
 
                           {/* Error state */}
