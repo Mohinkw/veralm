@@ -6,6 +6,7 @@ import { generateSlug } from '@/lib/utils';
 import { bearerToken } from '@/lib/auth/request';
 import { processArticleEmbeddings } from '@/lib/ai';
 import { executeRawSQL } from '@/db/client';
+import { auditArticleSubmission } from '@/lib/ai-detector';
 
 const FALLBACK_CREATOR_ID = '8ac8b4f3-b3b8-4d23-9c3f-d3900f84c375';
 
@@ -136,9 +137,25 @@ export async function POST(request: NextRequest) {
     const slug = generateSlug(title);
     const wordCount = content.split(/\s+/).filter((w: string) => w.length > 0).length;
 
-    // Determine status: Drafts stay as drafts; submitted articles are automatically approved for the AI model
-    const finalStatus = status === 'draft' ? 'draft' : 'approved';
+    // Run dual-engine data validation, AI detection, and quality assessment
+    const audit = await auditArticleSubmission(title, content);
+
+    // Determine status: Drafts stay as drafts. Submitted articles are approved if quality standards pass.
+    let finalStatus = 'pending_review';
+    if (status === 'draft') {
+      finalStatus = 'draft';
+    } else if (audit.verdict === 'approved') {
+      finalStatus = 'approved';
+    } else {
+      finalStatus = 'pending_review';
+    }
+
     const approvedAt = finalStatus === 'approved' ? new Date().toISOString() : null;
+
+    // Real dynamic quality scores calculated by the AI detector and heuristics engine
+    const qualityScoreStr = audit.compositeQualityScore.toFixed(2);
+    const originalityScoreStr = audit.originalityScore.toFixed(2);
+    const aiProbScoreStr = audit.aiProbabilityScore.toFixed(2);
 
     // Insert article (Dual-engine: Direct PG first, HTTPS REST fallback)
     let createdArticle: { id: string; slug: string; status: string } | null = null;
@@ -175,9 +192,9 @@ export async function POST(request: NextRequest) {
         'active',
         new Date().toISOString(),
         approvedAt,
-        finalStatus === 'approved' ? '96.00' : null,
-        finalStatus === 'approved' ? '98.00' : null,
-        finalStatus === 'approved' ? '6.00' : null,
+        qualityScoreStr,
+        originalityScoreStr,
+        aiProbScoreStr,
         'current',
       ]);
 
@@ -213,9 +230,9 @@ export async function POST(request: NextRequest) {
           licensing_status: 'active',
           submitted_at: new Date().toISOString(),
           approved_at: approvedAt,
-          composite_quality_score: finalStatus === 'approved' ? '96.00' : null,
-          originality_score: finalStatus === 'approved' ? '98.00' : null,
-          ai_probability_score: finalStatus === 'approved' ? '6.00' : null,
+          composite_quality_score: qualityScoreStr,
+          originality_score: originalityScoreStr,
+          ai_probability_score: aiProbScoreStr,
           freshness_status: 'current',
         })
         .select('id, slug, status')
@@ -267,6 +284,14 @@ export async function POST(request: NextRequest) {
       article_id: createdArticle.id,
       slug: createdArticle.slug,
       status: createdArticle.status,
+      audit: {
+        composite_quality_score: audit.compositeQualityScore,
+        originality_score: audit.originalityScore,
+        ai_probability_score: audit.aiProbabilityScore,
+        verdict: audit.verdict,
+        summary: audit.summary,
+        signals: audit.flaggedSignals,
+      },
     });
   } catch (error: any) {
     console.error('Article API error:', error);
