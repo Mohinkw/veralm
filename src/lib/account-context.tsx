@@ -10,6 +10,7 @@ interface UserProfile {
   email?: string;
   name?: string;
   isLoggedIn: boolean;
+  isPro: boolean;
 }
 
 interface AccountContextType {
@@ -17,6 +18,7 @@ interface AccountContextType {
   setMode: (mode: AccountMode) => void;
   toggleMode: () => void;
   user: UserProfile;
+  refreshProStatus: () => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -28,7 +30,25 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     name: 'VeraLM User',
     email: 'user@veralm.com',
     isLoggedIn: false,
+    isPro: false,
   });
+
+  const refreshProStatus = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      const res = await fetch('/api/pro/status', {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        cache: 'no-store',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUser((prev) => ({ ...prev, isPro: Boolean(data.isPro) }));
+      }
+    } catch {
+      // ignore
+    }
+  };
 
   useEffect(() => {
     // Load persisted mode, default to 'user'
@@ -48,7 +68,9 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
           email: session.user.email || 'user@veralm.com',
           name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'VeraLM User',
           isLoggedIn: true,
+          isPro: false,
         });
+        refreshProStatus();
       }
     });
 
@@ -59,12 +81,15 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
           email: session.user.email || 'user@veralm.com',
           name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'VeraLM User',
           isLoggedIn: true,
+          isPro: false,
         });
+        refreshProStatus();
       } else {
         setUser({
           name: 'VeraLM User',
           email: 'user@veralm.com',
           isLoggedIn: false,
+          isPro: false,
         });
       }
     });
@@ -90,12 +115,13 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
       name: 'VeraLM User',
       email: 'user@veralm.com',
       isLoggedIn: false,
+      isPro: false,
     });
     setMode('user');
   };
 
   return (
-    <AccountContext.Provider value={{ mode, setMode, toggleMode, user, logout }}>
+    <AccountContext.Provider value={{ mode, setMode, toggleMode, user, refreshProStatus, logout }}>
       {children}
     </AccountContext.Provider>
   );

@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useAccount } from '@/lib/account-context';
 import { supabase } from '@/lib/supabase';
+import { CreatorPayoutMethods } from '@/components/creator-payout-methods';
 
 export default function CreatorProfilePage() {
   const { user } = useAccount();
@@ -215,38 +216,8 @@ export default function CreatorProfilePage() {
               </div>
             </div>
 
-            {/* Payment & Verification Card */}
-            <div className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-4">
-              <h2 className="text-lg font-bold flex items-center gap-2">
-                <CreditCard className="h-5 w-5 text-primary" />
-                Stripe Connect & Payout Status
-              </h2>
-
-              <div className="p-4 rounded-xl bg-muted/40 border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <div className="font-semibold text-sm">Direct Deposit (Bank ACH)</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    Universal payout email: <span className="font-mono text-foreground">{email || user.email || 'Not configured'}</span>
-                  </div>
-                  <div className="text-xs text-emerald-600 font-semibold mt-1 flex items-center gap-1">
-                    <CheckCircle2 className="h-3 w-3" /> Eligible for 90% net royalty pool payouts (Threshold: $50.00 USD)
-                  </div>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => alert(`Stripe Connect setup link sent to ${email || user.email || 'your email'}.`)}
-                >
-                  Configure Payouts
-                </Button>
-              </div>
-
-              <div className="text-xs text-muted-foreground flex items-center gap-2">
-                <Lock className="h-4 w-4 text-muted-foreground shrink-0" />
-                <span>All banking data is processed securely through Stripe. VeraLM never stores your raw bank or card credentials.</span>
-              </div>
-            </div>
+            {/* Payment Methods Manager */}
+            <CreatorPayoutMethods />
 
             <Button type="submit" disabled={isSaving} className="gap-2">
               <Save className="h-4 w-4" />

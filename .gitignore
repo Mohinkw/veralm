@@ -5,6 +5,10 @@
 
 # Testing
 /coverage
+/.test-dist/
+
+# Scraped raw data (persisted in PostgreSQL)
+/data/
 
 # Next.js build output
 /.next/

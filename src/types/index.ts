@@ -359,3 +359,43 @@ export interface LicensingAgreement {
   is_current: boolean;
   revoked_at: string | null;
 }
+
+export interface SearchVaultRow {
+  article_id: string;
+  title: string;
+  slug?: string | null;
+  author_name?: string | null;
+  author_slug?: string | null;
+  chunk_text?: string | null;
+  excerpt?: string | null;
+  freshness_status?: FreshnessStatus | string | null;
+  approved_at?: string | null;
+  similarity?: number | null;
+  bm25_score?: number | null;
+  composite_quality_score?: string | number | null;
+}
+
+export interface SearchCitation extends Citation {
+  index: number;
+  slug: string;
+  url: string;
+  citation_token: string;
+}
+
+export interface SearchArticleUsed extends ArticleCitation {
+  slug: string;
+  url: string;
+  citation_token: string;
+  excerpt: string;
+}
+
+export interface SearchApiResponse {
+  answer: string;
+  citations: SearchCitation[];
+  articles_used: SearchArticleUsed[];
+  latency_ms: number;
+  was_cached: boolean;
+  vault_source: 'pgvector' | 'pg-fts' | 'demo-vault' | 'none';
+  ai_source: string;
+  model_used?: string;
+}

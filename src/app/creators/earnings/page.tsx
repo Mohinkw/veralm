@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/utils';
 import { useAccount } from '@/lib/account-context';
 import { supabase } from '@/lib/supabase';
+import { CreatorPayoutMethods } from '@/components/creator-payout-methods';
 
 type Article = {
   id: string;
@@ -220,6 +221,9 @@ export default function CreatorEarningsPage() {
               </div>
             )}
           </div>
+
+          {/* Payment Methods */}
+          <CreatorPayoutMethods />
 
           {/* Historical Payouts */}
           <div className="space-y-4">

@@ -761,15 +761,34 @@ export default function AIChatPage() {
                                           </div>
                                           <Link
                                             href={art.url || `/articles/${art.slug || art.article_id}`}
-                                            className="shrink-0 inline-flex items-center gap-1 text-xs text-primary hover:underline font-medium"
+                                            className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-semibold transition-colors"
                                           >
-                                            <ExternalLink className="h-3 w-3" />
-                                            View Source
+                                            <BookOpen className="h-3.5 w-3.5" />
+                                            Read Full Article
                                           </Link>
                                         </div>
                                       ))}
                                     </div>
                                   )}
+                                </div>
+                              )}
+
+                              {/* Quick Read Full Article CTA Bar */}
+                              {msg.response && msg.response.articles_used.length > 0 && (
+                                <div className="mt-3 flex flex-wrap items-center gap-2">
+                                  {msg.response.articles_used.slice(0, 2).map((art) => (
+                                    <Link
+                                      key={`cta-${art.article_id}`}
+                                      href={art.url || `/articles/${art.slug || art.article_id}`}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-primary/30 bg-primary/5 hover:bg-primary/10 text-xs font-semibold text-primary transition-colors"
+                                    >
+                                      <BookOpen className="h-3.5 w-3.5 shrink-0" />
+                                      <span className="truncate max-w-[220px]">
+                                        Read Full Article: {art.title}
+                                      </span>
+                                      <ExternalLink className="h-3 w-3 shrink-0" />
+                                    </Link>
+                                  ))}
                                 </div>
                               )}
                             </>

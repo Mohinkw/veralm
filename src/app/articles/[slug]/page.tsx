@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { cookies, headers } from 'next/headers';
 import {
   Sparkles,
   ShieldCheck,
@@ -18,9 +19,10 @@ import {
   Share2,
   DollarSign,
   ChevronRight,
+  UserPlus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { verifyCitationToken } from '@/lib/citation-token';
+import { isExternalSearchEngineReferer, verifyCitationToken } from '@/lib/citation-token';
 import { executeRawSQL } from '@/db/client';
 import { createServerClient } from '@/lib/supabase';
 import { MarkdownRenderer } from '@/components/markdown-renderer';
@@ -208,12 +210,44 @@ async function fetchArticle(slugOrId: string) {
   return null;
 }
 
+async function getViewerAccess(): Promise<{ isPro: boolean; isSignedInMember: boolean }> {
+  try {
+    const cookieStore = await cookies();
+    const proUid = cookieStore.get('veralm_pro_uid')?.value;
+    const readerUid = cookieStore.get('veralm_reader_uid')?.value;
+    const uid = proUid || readerUid;
+    if (!uid) return { isPro: false, isSignedInMember: false };
+
+    const res = await executeRawSQL(
+      `SELECT id, subscription_tier, pro_expires_at, is_active FROM users WHERE id = $1 LIMIT 1`,
+      [uid]
+    );
+    const row = res?.rows?.[0];
+    if (!row || row.is_active === false) return { isPro: false, isSignedInMember: false };
+
+    const isPro =
+      row.subscription_tier === 'pro' &&
+      (!row.pro_expires_at || new Date(row.pro_expires_at).getTime() > Date.now());
+
+    return { isPro, isSignedInMember: true };
+  } catch {
+    return { isPro: false, isSignedInMember: false };
+  }
+}
+
 export default async function ArticlePreviewPage({ params, searchParams }: Props) {
   const { slug } = await params;
-  const { token, citation_token, pass } = await searchParams;
+  const { token, citation_token } = await searchParams;
+  const headerStore = await headers();
+  const referer = headerStore.get('referer');
 
+  // Block external search-engine click-throughs from using leaked citation tokens
+  const fromExternalSearch = isExternalSearchEngineReferer(referer);
   const rawToken = token || citation_token;
-  const isAuthorized = verifyCitationToken(rawToken, slug) || pass === 'pro';
+  const hasValidCitation = !fromExternalSearch && verifyCitationToken(rawToken, slug);
+
+  const { isPro, isSignedInMember } = await getViewerAccess();
+  const isAuthorized = hasValidCitation || isPro || isSignedInMember;
 
   const article = await fetchArticle(slug);
 
@@ -534,17 +568,23 @@ export default async function ArticlePreviewPage({ params, searchParams }: Props
                   Access is granted automatically when cited in response to your AI queries, or with a VeraLM Pro Pass.
                 </p>
 
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 flex-wrap">
                   <Link href={`/?q=${encodeURIComponent(displayTitle)}`}>
                     <Button className="w-full sm:w-auto gap-2">
                       <Sparkles className="h-4 w-4" />
                       Prompt VeraLM Model on this Topic
                     </Button>
                   </Link>
-                  <Link href={`/articles/${slug}?pass=pro`}>
+                  <Link href="/register">
+                    <Button variant="secondary" className="w-full sm:w-auto gap-2">
+                      <UserPlus className="h-4 w-4" />
+                      Sign Up Free to Read
+                    </Button>
+                  </Link>
+                  <Link href="/pro">
                     <Button variant="outline" className="w-full sm:w-auto gap-2 border-primary/30 text-primary hover:bg-primary/10">
                       <Unlock className="h-4 w-4" />
-                      Read with VeraLM Pro Pass
+                      Unlock Ad-Free with VeraLM Pro
                     </Button>
                   </Link>
                 </div>

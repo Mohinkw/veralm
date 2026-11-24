@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import Script from 'next/script';
 import '@/styles/globals.css';
 import { ThemeProvider } from '@/components/theme-provider';
 import { AccountProvider } from '@/lib/account-context';
@@ -99,6 +100,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     ],
   };
 
+  const gaMeasurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
+  const adsenseClientId = process.env.NEXT_PUBLIC_ADSENSE_CLIENT;
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -124,6 +128,25 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             {children}
           </AccountProvider>
         </ThemeProvider>
+        {gaMeasurementId && (
+          <>
+            <Script
+              src={`https://www.googletagmanager.com/gtag/js?id=${gaMeasurementId}`}
+              strategy="afterInteractive"
+            />
+            <Script id="ga4-init" strategy="afterInteractive">
+              {`window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', '${gaMeasurementId}', { page_path: window.location.pathname });`}
+            </Script>
+          </>
+        )}
+        {adsenseClientId && (
+          <Script
+            async
+            src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsenseClientId}`}
+            crossOrigin="anonymous"
+            strategy="afterInteractive"
+          />
+        )}
       </body>
     </html>
   );

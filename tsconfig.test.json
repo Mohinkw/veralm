@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "noEmit": false,
+    "outDir": ".test-dist",
+    "rootDir": "."
+  },
+  "include": [
+    "tests/**/*.ts",
+    "src/lib/content-validator.ts",
+    "src/lib/rate-limit.ts",
+    "src/lib/revenue/calculator.ts",
+    "src/lib/citation-token.ts"
+  ]
+}

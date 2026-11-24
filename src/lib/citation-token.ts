@@ -24,14 +24,39 @@ export function createCitationToken(slugOrId: string, sessionId?: string): strin
   ).toString('base64url');
 }
 
+const EXTERNAL_SEARCH_HOSTS = [
+  'google.',
+  'bing.com',
+  'duckduckgo.com',
+  'search.yahoo.',
+  'yahoo.com',
+  'yandex.',
+  'baidu.com',
+  'ecosia.org',
+  'search.brave.com',
+  'perplexity.ai',
+  'chatgpt.com',
+];
+
+/**
+ * Returns true if the HTTP Referer belongs to an external search engine or AI aggregator.
+ * Used to ensure visitors clicking through from external search engines see the gated teaser.
+ */
+export function isExternalSearchEngineReferer(referer?: string | null): boolean {
+  if (!referer) return false;
+  try {
+    const host = new URL(referer).hostname.toLowerCase();
+    return EXTERNAL_SEARCH_HOSTS.some((h) => host.includes(h));
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Verifies that a citation token is authentic, unexpired, and matches the requested article slug/id.
  */
 export function verifyCitationToken(token?: string, slugOrId?: string): boolean {
   if (!token || !slugOrId) return false;
-
-  // Allow preview / pro bypass flags for platform previews
-  if (token === 'preview' || token === 'pro') return true;
 
   try {
     const raw = Buffer.from(token, 'base64url').toString('utf-8');

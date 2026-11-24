@@ -57,6 +57,9 @@ export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   email: text('email').unique().notNull(),
   role: userRoleEnum('role').default('creator').notNull(),
+  subscriptionTier: text('subscription_tier').default('free').notNull(), // 'free' | 'pro'
+  proExpiresAt: timestamp('pro_expires_at', { withTimezone: true }),
+  stripeCustomerId: text('stripe_customer_id'),
   isActive: boolean('is_active').default(true).notNull(),
   lastSignIn: timestamp('last_sign_in', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -113,6 +116,32 @@ export const creatorProfiles = pgTable('creator_profiles', {
 }, (table) => ({
   slugIdx: uniqueIndex('idx_creator_slug').on(table.slug),
   reputationIdx: index('idx_creator_reputation').on(table.reputationScore),
+}));
+
+// Creator Payout Methods
+export const payoutMethodTypeEnum = pgEnum('payout_method_type', [
+  'stripe_connect',
+  'payoneer',
+  'wise',
+  'paypal',
+  'bank_wire',
+  'crypto',
+]);
+
+export const creatorPayoutMethods = pgTable('creator_payout_methods', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  creatorId: uuid('creator_id').notNull().references(() => creatorProfiles.id, { onDelete: 'cascade' }),
+  methodType: payoutMethodTypeEnum('method_type').notNull(),
+  label: text('label').notNull(),
+  accountIdentifier: text('account_identifier').notNull(),
+  currency: text('currency').default('USD').notNull(),
+  detailsJson: jsonb('details_json').default({}).notNull(),
+  isDefault: boolean('is_default').default(false).notNull(),
+  isVerified: boolean('is_verified').default(false).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  creatorIdx: index('idx_payout_methods_creator').on(table.creatorId),
 }));
 
 // Licensing Agreements
