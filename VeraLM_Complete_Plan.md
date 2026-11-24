@@ -164,7 +164,7 @@ Layer 8: Audit log of every access to content
 
 ```mermaid
 flowchart TD
-    A["User asks a question\non AISAS Search"] --> B["RAG Engine retrieves\nrelevant article chunks"]
+    A["User asks a question\non VeraLM Search"] --> B["RAG Engine retrieves\nrelevant article chunks"]
     B --> C["AI generates answer\nusing those chunks"]
     C --> D["System logs:\nWhich articles were used\nHow much each contributed"]
     D --> E["Attribution scores\naccumulate throughout the month"]
