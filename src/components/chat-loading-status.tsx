@@ -89,7 +89,7 @@ export function ChatLoadingStatus() {
         setIndex((prev) => (prev + 1) % LOADING_MESSAGES.length);
         setFade(true);
       }, 200);
-    }, 2200);
+    }, 3000);
 
     return () => clearInterval(interval);
   }, []);
