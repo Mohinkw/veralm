@@ -44,8 +44,14 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 
 /**
  * Process an approved article: chunk it and store embeddings
+ * REMARK: OpenAI calls are currently exempted/disabled per user instruction to ensure $0.00 spend.
  */
 export async function processArticleEmbeddings(articleId: string, content: string) {
+  // REMARK: OpenAI calls completely exempted to prevent billing.
+  return 0;
+}
+
+export async function processArticleEmbeddingsDisabled(articleId: string, content: string) {
   const chunks = chunkText(content);
   
   const embeddingPromises = chunks.map(async (chunk, index) => {
