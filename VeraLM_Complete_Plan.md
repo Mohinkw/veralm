@@ -1103,7 +1103,7 @@ LIMIT 6;
 ### System Prompt (Guides AI Answers)
 
 ```
-You are a search assistant for AISAS, an exclusive knowledge platform.
+You are a search assistant for VeraLM, an exclusive knowledge platform.
 
 RULES — follow strictly:
 1. Answer ONLY using information from the provided source articles.
@@ -1638,5 +1638,5 @@ Launch day:
 
 ---
 
-*This document is the master reference for the AISAS platform. Update after each phase milestone.*
+*This document is the master reference for the VeraLM platform. Update after each phase milestone.*
 *Version 2.0 · November 2026*

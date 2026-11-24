@@ -10,7 +10,7 @@ async function seed() {
   // 1. User
   const userRes = await client.query(`
     INSERT INTO users (email, role) 
-    VALUES ('alex@aisas.ai', 'creator')
+    VALUES ('alex@veralm.ai', 'creator')
     ON CONFLICT (email) DO UPDATE SET updated_at = NOW()
     RETURNING id;
   `);

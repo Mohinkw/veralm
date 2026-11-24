@@ -1,7 +1,7 @@
 -- ============================================================
--- AISAS Platform - Initial Schema
+-- VeraLM Platform - Initial Schema
 -- ============================================================
--- This migration creates all core tables for the AISAS platform
+-- This migration creates all core tables for the VeraLM platform
 
 -- ============================================================
 -- EXTENSIONS

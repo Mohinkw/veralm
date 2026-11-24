@@ -7,7 +7,7 @@ export const metadata = {
 
 const posts = [
   {
-    slug: "introducing-aisas",
+    slug: "introducing-veralm",
     date: "November 2026",
     category: "Platform",
     title: "Introducing VeraLM: Where Expert Knowledge Powers AI Answers",
