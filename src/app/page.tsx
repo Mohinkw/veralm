@@ -34,6 +34,7 @@ import {
 import { cn, formatRelativeTime } from '@/lib/utils';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { useAccount } from '@/lib/account-context';
+import { MarkdownRenderer } from '@/components/markdown-renderer';
 
 /* ─── Types ─────────────────────────────────────────────── */
 interface Citation {
@@ -661,8 +662,8 @@ export default function AIChatPage() {
                           {/* Response Content */}
                           {msg.content && (
                             <>
-                              <div className="text-sm leading-7 text-foreground whitespace-pre-wrap">
-                                {msg.content}
+                              <div className="text-sm leading-7 text-foreground">
+                                <MarkdownRenderer content={msg.content} />
                               </div>
 
                               {/* Action Bar */}

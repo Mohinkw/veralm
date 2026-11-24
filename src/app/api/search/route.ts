@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase, createServerClient } from "@/lib/supabase";
+import { executeRawSQL } from "@/db/client";
 import { generateSessionId } from "@/lib/utils";
 import { generateChatAnswer, generateEmbedding, hasAnyAI } from "@/lib/ai-providers";
 import { createCitationToken } from "@/lib/citation-token";
@@ -167,7 +168,41 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Fallback to demo vault if no supabase matches
+    // Fallback: search PostgreSQL articles table directly for keywords
+    if (vaultResults.length === 0) {
+      try {
+        const words = query.trim().split(/\s+/).filter((w: string) => w.length > 2);
+        if (words.length > 0) {
+          const conditions = words.map((_, i) => `(a.title ILIKE $${i + 1} OR a.content ILIKE $${i + 1} OR a.slug ILIKE $${i + 1})`).join(' OR ');
+          const params = words.map((w: string) => `%${w}%`);
+          const sql = `
+            SELECT 
+              a.id as article_id, 
+              a.title, 
+              a.slug, 
+              a.excerpt, 
+              a.content as chunk_text, 
+              a.approved_at, 
+              a.composite_quality_score,
+              COALESCE(cp.display_name, 'Verified Contributor') as author_name
+            FROM articles a
+            LEFT JOIN creator_profiles cp ON a.creator_id = cp.id
+            WHERE a.status = 'approved' AND (${conditions})
+            ORDER BY a.composite_quality_score DESC NULLS LAST, a.approved_at DESC
+            LIMIT 3;
+          `;
+          const dbRes = await executeRawSQL(sql, params);
+          if (dbRes && dbRes.rows && dbRes.rows.length > 0) {
+            vaultResults = dbRes.rows;
+            vaultSource = "pg-direct";
+          }
+        }
+      } catch (err) {
+        console.warn("[Chat API] Direct articles keyword query failed:", err);
+      }
+    }
+
+    // Fallback to demo vault if no database matches
     if (vaultResults.length === 0) {
       const demoMatches = keywordMatch(query);
       if (demoMatches.length > 0) {
