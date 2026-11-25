@@ -1,3 +1,8 @@
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+const { withSentryConfig } = require('@sentry/nextjs/config');
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -20,4 +25,8 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+  org: 'veralm',
+  project: 'veralm',
+  silent: !process.env.CI,
+});

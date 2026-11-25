@@ -41,6 +41,7 @@
     "@radix-ui/react-toggle": "^1.2.1",
     "@radix-ui/react-toggle-group": "^1.2.1",
     "@radix-ui/react-tooltip": "^1.4.1",
+    "@sentry/nextjs": "^11.17.0",
     "@supabase/supabase-js": "^2.119.0",
     "@types/pg": "^8.23.1",
     "@types/react": "^19.3.0",
