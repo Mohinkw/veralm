@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { PenLine, User, LogOut } from 'lucide-react';
+import { PenLine, User, LogOut, Crown } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { VeraLMLogo } from '@/components/veralm-logo';
 import { useAccount } from '@/lib/account-context';
@@ -89,6 +89,26 @@ export function Navbar({ activePage }: { activePage?: string }) {
                 Get Started
               </Link>
             </>
+          )}
+
+          {/* Upgrade to Pro */}
+          {!user.isPro ? (
+            <Link
+              href="/pro"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition-colors"
+            >
+              <Crown className="h-3.5 w-3.5 text-amber-500" />
+              <span className="hidden sm:inline">Upgrade to Pro</span>
+              <span className="sm:hidden">Pro</span>
+            </Link>
+          ) : (
+            <Link
+              href="/pro"
+              className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400"
+            >
+              <Crown className="h-3 w-3 text-amber-500" />
+              <span>Pro</span>
+            </Link>
           )}
 
           {/* Theme toggle */}

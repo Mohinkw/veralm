@@ -20,6 +20,12 @@ import {
   ChevronUp,
   RotateCcw,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Search,
+  HelpCircle,
+  Crown,
+  LogOut,
   Loader2,
   DollarSign,
   MessageSquare,
@@ -120,7 +126,7 @@ function freshnessColor(s: string) {
    MAIN CHATBOT PAGE
 ════════════════════════════════════════════════════════════ */
 export default function AIChatPage() {
-  const { mode, toggleMode, user } = useAccount();
+  const { mode, toggleMode, user, logout } = useAccount();
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [convs, setConvs] = useState<StoredConv[]>([]);
@@ -128,6 +134,7 @@ export default function AIChatPage() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [sessionId] = useState(() => crypto.randomUUID());
 
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -446,36 +453,145 @@ export default function AIChatPage() {
           )}
         </div>
 
-        {/* Footer Account Card */}
-        <div className="p-3 border-t border-border shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs shrink-0">
-              {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-xs font-semibold text-foreground truncate">
-                {user.name || 'VeraLM User'}
+        {/* Sidebar Upgrade to Pro CTA */}
+        {!user.isPro && (
+          <div className="px-3 pb-2 shrink-0">
+            <Link
+              href="/pro"
+              className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 transition-colors"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <Crown className="h-4 w-4 shrink-0 text-amber-500" />
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold truncate">Upgrade to Pro</div>
+                  <div className="text-[10px] opacity-80 truncate">Ad-free & full vault access</div>
+                </div>
               </div>
-              <div className="text-[11px] text-muted-foreground truncate flex items-center gap-1">
-                <span className="capitalize">{mode}</span> mode
-              </div>
-            </div>
-            {user.isLoggedIn ? (
-              <button
-                onClick={toggleMode}
-                className="shrink-0 px-2.5 py-1 rounded-lg border border-border text-[11px] font-medium hover:bg-accent transition-colors"
-                title="Switch mode"
-              >
-                {mode === 'creator' ? 'User' : 'Creator'}
-              </button>
-            ) : (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500 text-white shrink-0">
+                PRO
+              </span>
+            </Link>
+          </div>
+        )}
+
+        {/* Footer Account Card with Hamburger Menu */}
+        <div className="p-3 border-t border-border shrink-0 relative">
+          {accountMenuOpen && (
+            <div className="absolute bottom-full left-2 right-2 mb-2 rounded-xl border border-border bg-popover text-popover-foreground shadow-lg p-1.5 z-30 space-y-0.5">
               <Link
-                href="/register"
-                className="shrink-0 px-2.5 py-1 rounded-lg bg-primary text-primary-foreground text-[11px] font-semibold hover:bg-primary/90 transition-colors"
+                href="/search"
+                onClick={() => setAccountMenuOpen(false)}
+                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium hover:bg-accent transition-colors"
               >
-                Sign In
+                <Search className="h-3.5 w-3.5 text-muted-foreground" />
+                <span>Search</span>
               </Link>
-            )}
+              <Link
+                href="/creators"
+                onClick={() => setAccountMenuOpen(false)}
+                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium hover:bg-accent transition-colors"
+              >
+                <DollarSign className="h-3.5 w-3.5 text-green-500" />
+                <span>For Creators</span>
+              </Link>
+              <Link
+                href="/about"
+                onClick={() => setAccountMenuOpen(false)}
+                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium hover:bg-accent transition-colors"
+              >
+                <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                <span>How It Works</span>
+              </Link>
+              {!user.isPro && (
+                <Link
+                  href="/pro"
+                  onClick={() => setAccountMenuOpen(false)}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition-colors"
+                >
+                  <Crown className="h-3.5 w-3.5 text-amber-500" />
+                  <span>Upgrade to Pro</span>
+                </Link>
+              )}
+              <div className="my-1 border-t border-border" />
+              {user.isLoggedIn ? (
+                <>
+                  <Link
+                    href="/creators/profile"
+                    onClick={() => setAccountMenuOpen(false)}
+                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium hover:bg-accent transition-colors"
+                  >
+                    <User className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span>Account & Profile</span>
+                  </Link>
+                  <button
+                    onClick={() => {
+                      setAccountMenuOpen(false);
+                      logout();
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-destructive hover:bg-destructive/10 transition-colors"
+                  >
+                    <LogOut className="h-3.5 w-3.5" />
+                    <span>Sign Out</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link
+                    href="/login"
+                    onClick={() => setAccountMenuOpen(false)}
+                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium hover:bg-accent transition-colors"
+                  >
+                    <LogIn className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span>Sign In</span>
+                  </Link>
+                  <Link
+                    href="/register"
+                    onClick={() => setAccountMenuOpen(false)}
+                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-primary hover:bg-primary/10 transition-colors"
+                  >
+                    <UserCheck className="h-3.5 w-3.5" />
+                    <span>Get Started</span>
+                  </Link>
+                </>
+              )}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setAccountMenuOpen((o) => !o)}
+              className="flex items-center gap-2.5 flex-1 min-w-0 text-left rounded-lg p-1 -m-1 hover:bg-accent/60 transition-colors"
+              aria-expanded={accountMenuOpen}
+              aria-label="Open account menu"
+            >
+              <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs shrink-0">
+                {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-semibold text-foreground truncate flex items-center gap-1">
+                  <span className="truncate">{user.name || 'VeraLM User'}</span>
+                  {user.isPro && (
+                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold">
+                      PRO
+                    </span>
+                  )}
+                </div>
+                <div className="text-[11px] text-muted-foreground truncate flex items-center gap-1">
+                  <span className="capitalize">{mode}</span> mode
+                </div>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setAccountMenuOpen((o) => !o)}
+              className="shrink-0 p-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              aria-label="Account navigation menu"
+              title="Menu"
+            >
+              <Menu className="h-4 w-4" />
+            </button>
           </div>
         </div>
       </aside>
@@ -488,9 +604,14 @@ export default function AIChatPage() {
             <button
               onClick={() => setSidebarOpen(o => !o)}
               className="p-2 rounded-xl hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-              aria-label="Toggle sidebar"
+              aria-label={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+              title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
             >
-              <Menu className="h-5 w-5" />
+              {sidebarOpen ? (
+                <PanelLeftClose className="h-5 w-5" />
+              ) : (
+                <PanelLeftOpen className="h-5 w-5" />
+              )}
             </button>
             <div className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-border bg-card/80 backdrop-blur text-xs font-medium">
               <VeraLMLogo className="h-3.5 w-3.5" size={14} />
@@ -499,6 +620,16 @@ export default function AIChatPage() {
           </div>
 
           <div className="flex items-center gap-2 pointer-events-auto">
+            {!user.isPro && (
+              <Link
+                href="/pro"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition-colors"
+              >
+                <Crown className="h-3.5 w-3.5 text-amber-500" />
+                <span className="hidden sm:inline">Upgrade to Pro</span>
+                <span className="sm:hidden">Pro</span>
+              </Link>
+            )}
             {/* Mode quick switch */}
             <button
               onClick={toggleMode}
