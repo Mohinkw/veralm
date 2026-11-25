@@ -1,6 +1,7 @@
 import Link from 'next/link';
-import { Sparkles, DollarSign, Shield, BookOpen, ArrowRight, CheckCircle2, TrendingUp, Users, Award, Lock } from 'lucide-react';
+import { DollarSign, Shield, BookOpen, ArrowRight, CheckCircle2, TrendingUp, Users, Award, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { VeraLMLogo } from '@/components/veralm-logo';
 
 export default function CreatorLandingPage() {
   return (
@@ -9,7 +10,7 @@ export default function CreatorLandingPage() {
       <nav className="border-b border-border sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 font-bold text-xl">
-            <Sparkles className="h-6 w-6 text-primary" />
+            <VeraLMLogo className="h-6 w-6" />
             <span>VeraLM</span>
             <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium ml-1">For Creators</span>
           </Link>

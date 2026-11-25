@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import crypto from 'crypto';
 import { validateContentHeuristics } from '../src/lib/content-validator';
 import {
   isRateLimited,
@@ -11,6 +12,9 @@ import {
   isExternalSearchEngineReferer,
   verifyCitationToken,
 } from '../src/lib/citation-token';
+import { verifyStripeSignature } from '../src/lib/stripe-webhook';
+import { extractArticleSlugFromPath } from '../src/lib/revenue/ga4';
+import { parseSentryDsn } from '../src/lib/observability';
 
 test('validateContentHeuristics rejects short content under 150 words', () => {
   const report = validateContentHeuristics('Too short article.', 'Short');
@@ -101,4 +105,31 @@ test('citation-token blocks static bypasses and detects external search engine r
   assert.equal(isExternalSearchEngineReferer('https://www.perplexity.ai/search'), true);
   assert.equal(isExternalSearchEngineReferer('https://veralm.com/'), false);
   assert.equal(isExternalSearchEngineReferer(null), false);
+});
+
+test('verifyStripeSignature validates HMAC-SHA256 signatures and rejects tampered or stale payloads', () => {
+  const secret = 'whsec_test_secret_123';
+  const payload = JSON.stringify({ id: 'evt_1', type: 'checkout.session.completed' });
+  const now = 1700000000;
+  const sig = crypto.createHmac('sha256', secret).update(`${now}.${payload}`).digest('hex');
+
+  assert.equal(verifyStripeSignature(payload, `t=${now},v1=${sig}`, secret, 300, now + 10), true);
+  assert.equal(verifyStripeSignature(payload, `t=${now},v1=deadbeef`, secret, 300, now + 10), false);
+  assert.equal(verifyStripeSignature(payload, `t=${now},v1=${sig}`, secret, 300, now + 400), false);
+  assert.equal(verifyStripeSignature(payload, null, secret, 300, now), false);
+});
+
+test('extractArticleSlugFromPath parses /articles/<slug> paths', () => {
+  assert.equal(extractArticleSlugFromPath('/articles/postgres-hnsw?ref=chat'), 'postgres-hnsw');
+  assert.equal(extractArticleSlugFromPath('/articles/postgres-hnsw/123'), 'postgres-hnsw');
+  assert.equal(extractArticleSlugFromPath('/about'), null);
+});
+
+test('parseSentryDsn builds envelope URL from valid DSN', () => {
+  const parsed = parseSentryDsn('https://abc123@o456.ingest.sentry.io/789');
+  assert.deepEqual(parsed, {
+    envelopeUrl: 'https://o456.ingest.sentry.io/api/789/envelope/',
+    publicKey: 'abc123',
+  });
+  assert.equal(parseSentryDsn('not-a-dsn'), null);
 });

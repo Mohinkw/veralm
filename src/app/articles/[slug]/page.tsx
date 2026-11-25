@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { cookies, headers } from 'next/headers';
+import { VeraLMLogo } from '@/components/veralm-logo';
 import {
   Sparkles,
   ShieldCheck,
@@ -305,7 +306,7 @@ export default async function ArticlePreviewPage({ params, searchParams }: Props
       <nav className="border-b border-border sticky top-0 z-50 bg-background/95 backdrop-blur">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 font-bold text-xl">
-            <Sparkles className="h-6 w-6 text-primary" />
+            <VeraLMLogo className="h-6 w-6" />
             <span>VeraLM</span>
             <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/10 text-primary font-mono ml-1">
               Knowledge Vault

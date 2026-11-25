@@ -3,7 +3,8 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { Sparkles, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
+import { VeraLMLogo } from '@/components/veralm-logo';
 
 function CallbackHandler() {
   const router = useRouter();
@@ -69,8 +70,8 @@ function CallbackHandler() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen px-4 text-center">
-      <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary mb-4 animate-pulse">
-        <Sparkles className="h-6 w-6" />
+      <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl mb-4 animate-pulse">
+        <VeraLMLogo className="h-12 w-12 rounded-2xl" size={48} />
       </div>
       <div className="flex items-center gap-2 text-sm font-medium text-foreground">
         <Loader2 className="h-4 w-4 animate-spin text-primary" />

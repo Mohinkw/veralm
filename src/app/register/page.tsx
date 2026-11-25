@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Sparkles, ArrowRight, Mail, Lock, User, AlertCircle, CheckCircle } from 'lucide-react';
+import { ArrowRight, Mail, Lock, User, AlertCircle, CheckCircle } from 'lucide-react';
+import { VeraLMLogo } from '@/components/veralm-logo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
@@ -97,7 +98,7 @@ export default function RegisterPage() {
       {/* Header */}
       <header className="border-b border-border py-4 px-6 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2 font-bold text-xl">
-          <Sparkles className="h-6 w-6 text-primary" />
+          <VeraLMLogo className="h-6 w-6" />
           <span>VeraLM</span>
         </Link>
         <Link href="/login" className="text-sm font-medium text-muted-foreground hover:text-foreground">
@@ -109,8 +110,8 @@ export default function RegisterPage() {
       <main className="flex-1 flex items-center justify-center p-6">
         <div className="w-full max-w-md bg-card border border-border rounded-2xl p-8 shadow-sm">
           <div className="text-center mb-6">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary/10 text-primary mb-3">
-              <Sparkles className="h-6 w-6" />
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl mb-3">
+              <VeraLMLogo className="h-10 w-10 rounded-xl" size={40} />
             </div>
             <h1 className="text-2xl font-bold tracking-tight">Create an Account</h1>
             <p className="text-xs text-muted-foreground mt-1.5">

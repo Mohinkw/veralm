@@ -1,44 +1,10 @@
 import Link from "next/link";
+import { BLOG_POSTS as posts } from "@/lib/blog-posts";
 
 export const metadata = {
   title: "Blog | VeraLM",
   description: "Platform updates, creator spotlights, and knowledge economy insights from the VeraLM team.",
 };
-
-const posts = [
-  {
-    slug: "introducing-veralm",
-    date: "November 2026",
-    category: "Platform",
-    title: "Introducing VeraLM: Where Expert Knowledge Powers AI Answers",
-    excerpt:
-      "We built VeraLM to fix a broken incentive loop — AI gets smarter, creators get nothing. Here's how we're changing that.",
-  },
-  {
-    slug: "how-rag-pays-creators",
-    date: "November 2026",
-    category: "Technology",
-    title: "How RAG-Based Attribution Pays the Right People",
-    excerpt:
-      "Every AI-generated answer cites a source. We track those citations and distribute revenue proportionally. Here's the math.",
-  },
-  {
-    slug: "quality-over-volume",
-    date: "October 2026",
-    category: "Editorial",
-    title: "Quality Over Volume: Why We Reject 70% of Submissions",
-    excerpt:
-      "Our three-stage verification process — automated checks, originality scoring, and human expert review — ensures only the best content enters the vault.",
-  },
-  {
-    slug: "creator-spotlight-alex-rivers",
-    date: "October 2026",
-    category: "Creator Spotlight",
-    title: "Creator Spotlight: Alex Rivers on Database Expertise",
-    excerpt:
-      "How a PostgreSQL performance specialist turned a decade of hard-won knowledge into a sustainable income stream on VeraLM.",
-  },
-];
 
 export default function BlogPage() {
   return (

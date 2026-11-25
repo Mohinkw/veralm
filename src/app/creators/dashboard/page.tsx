@@ -20,6 +20,7 @@ import {
   LogIn,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { VeraLMLogo } from '@/components/veralm-logo';
 import { formatCurrency, formatRelativeTime } from '@/lib/utils';
 import { useAccount } from '@/lib/account-context';
 import { supabase } from '@/lib/supabase';
@@ -84,7 +85,7 @@ export default function CreatorDashboardPage() {
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-6">
             <Link href="/" className="flex items-center gap-2 font-bold text-xl">
-              <Sparkles className="h-6 w-6 text-primary" />
+              <VeraLMLogo className="h-6 w-6" />
               <span>VeraLM</span>
               <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">Creator Studio</span>
             </Link>

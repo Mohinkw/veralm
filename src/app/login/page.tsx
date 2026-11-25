@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Sparkles, ArrowRight, Lock, Mail, AlertCircle } from 'lucide-react';
+import { ArrowRight, Lock, Mail, AlertCircle } from 'lucide-react';
+import { VeraLMLogo } from '@/components/veralm-logo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
@@ -49,7 +50,7 @@ export default function LoginPage() {
       {/* Header */}
       <header className="border-b border-border py-4 px-6 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2 font-bold text-xl">
-          <Sparkles className="h-6 w-6 text-primary" />
+          <VeraLMLogo className="h-6 w-6" />
           <span>VeraLM</span>
         </Link>
         <Link href="/register" className="text-sm font-medium text-muted-foreground hover:text-foreground">

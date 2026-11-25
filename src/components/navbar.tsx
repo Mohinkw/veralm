@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { Sparkles, PenLine, User, LogOut } from 'lucide-react';
+import { PenLine, User, LogOut } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { VeraLMLogo } from '@/components/veralm-logo';
 import { useAccount } from '@/lib/account-context';
 
 export function Navbar({ activePage }: { activePage?: string }) {
@@ -15,7 +16,7 @@ export function Navbar({ activePage }: { activePage?: string }) {
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 font-bold text-xl shrink-0">
-          <Sparkles className="h-6 w-6 text-primary" />
+          <VeraLMLogo className="h-6 w-6" />
           <span>VeraLM</span>
         </Link>
 

@@ -18,10 +18,12 @@ import {
   Plus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { VeraLMLogo } from '@/components/veralm-logo';
 import { formatCurrency } from '@/lib/utils';
 import { useAccount } from '@/lib/account-context';
 import { supabase } from '@/lib/supabase';
 import { CreatorPayoutMethods } from '@/components/creator-payout-methods';
+import { CreatorTaxForm } from '@/components/creator-tax-form';
 
 type Article = {
   id: string;
@@ -31,13 +33,27 @@ type Article = {
   total_earnings_attributed: number | null;
 };
 
+type EarningRecord = {
+  id: string;
+  revenuePeriod: string;
+  totalQueryContributions: number;
+  contributionSharePct: string | null;
+  creatorNetEarnings: string;
+  status: string;
+  paidAt: string | null;
+  stripeTransferId: string | null;
+  notes: string | null;
+};
+
 export default function CreatorEarningsPage() {
   const { user } = useAccount();
   const [articles, setArticles] = useState<Article[]>([]);
+  const [earningsHistory, setEarningsHistory] = useState<EarningRecord[]>([]);
+  const [summary, setSummary] = useState({ lifetimePaid: 0, minimumPayout: 50, paymentEmail: '' });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function loadArticles() {
+    async function loadEarningsData() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
@@ -45,13 +61,26 @@ export default function CreatorEarningsPage() {
           return;
         }
 
-        const response = await fetch('/api/creators/articles?page=0&status=all', {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-          cache: 'no-store',
-        });
-        if (response.ok) {
-          const data = await response.json();
+        const headers = { Authorization: `Bearer ${session.access_token}` };
+        const [articlesRes, earningsRes] = await Promise.all([
+          fetch('/api/creators/articles?page=0&status=all', { headers, cache: 'no-store' }),
+          fetch('/api/creators/earnings', { headers, cache: 'no-store' }),
+        ]);
+
+        if (articlesRes.ok) {
+          const data = await articlesRes.json();
           setArticles(data.articles || []);
+        }
+        if (earningsRes.ok) {
+          const data = await earningsRes.json();
+          setEarningsHistory(data.earnings || []);
+          if (data.summary) {
+            setSummary({
+              lifetimePaid: Number(data.summary.lifetimePaid || 0),
+              minimumPayout: Number(data.summary.minimumPayout || 50),
+              paymentEmail: data.summary.paymentEmail || '',
+            });
+          }
         }
       } catch {
         // ignore
@@ -60,7 +89,7 @@ export default function CreatorEarningsPage() {
       }
     }
 
-    loadArticles();
+    loadEarningsData();
   }, []);
 
   const totalEarnings = articles.reduce((sum, a) => sum + (Number(a.total_earnings_attributed) || 0), 0);
@@ -71,10 +100,10 @@ export default function CreatorEarningsPage() {
   const earningsSummary = {
     currentUnpaid: totalEarnings,
     nextPayoutDate: '1st of next month',
-    minimumPayoutThreshold: 50.00,
-    lifetimePaid: 0.00,
+    minimumPayoutThreshold: summary.minimumPayout,
+    lifetimePaid: summary.lifetimePaid,
     stripeAccountStatus: user.isLoggedIn ? 'Active & Universal' : 'Pending Sign In',
-    paymentEmail: user.email || 'Not configured',
+    paymentEmail: summary.paymentEmail || user.email || 'Not configured',
     currency: 'USD',
   };
 
@@ -85,7 +114,7 @@ export default function CreatorEarningsPage() {
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-6">
             <Link href="/" className="flex items-center gap-2 font-bold text-xl">
-              <Sparkles className="h-6 w-6 text-primary" />
+              <VeraLMLogo className="h-6 w-6" />
               <span>VeraLM</span>
               <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">Creator Studio</span>
             </Link>
@@ -225,14 +254,75 @@ export default function CreatorEarningsPage() {
           {/* Payment Methods */}
           <CreatorPayoutMethods />
 
+          {/* Tax Compliance */}
+          <CreatorTaxForm />
+
           {/* Historical Payouts */}
           <div className="space-y-4">
-            <h2 className="text-lg font-bold">Payout Distribution History</h2>
-            <div className="p-8 rounded-xl border border-dashed border-border text-center bg-card/50 space-y-2">
-              <p className="text-xs text-muted-foreground">
-                No past payout distributions yet. Distributions are executed on the 1st of each month when earnings meet the $50.00 minimum threshold.
-              </p>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold">Payout Distribution History</h2>
+              {earningsSummary.lifetimePaid > 0 && (
+                <span className="text-xs font-medium text-muted-foreground">
+                  Lifetime paid: <strong className="text-emerald-600">{formatCurrency(earningsSummary.lifetimePaid)}</strong>
+                </span>
+              )}
             </div>
+            {loading ? (
+              <div className="p-8 rounded-xl border border-border text-center bg-card/50 text-xs text-muted-foreground">
+                Loading payout history...
+              </div>
+            ) : earningsHistory.length === 0 ? (
+              <div className="p-8 rounded-xl border border-dashed border-border text-center bg-card/50 space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  No past payout distributions yet. Distributions are executed on the 1st of each month when earnings meet the {formatCurrency(earningsSummary.minimumPayoutThreshold)} minimum threshold.
+                </p>
+              </div>
+            ) : (
+              <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
+                <table className="w-full text-left border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/40 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      <th className="py-3 px-4">Period</th>
+                      <th className="py-3 px-4">Citations</th>
+                      <th className="py-3 px-4">Share</th>
+                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4">Reference</th>
+                      <th className="py-3 px-4 text-right">Net Payout</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {earningsHistory.map((row) => (
+                      <tr key={row.id}>
+                        <td className="py-3 px-4 font-medium">{row.revenuePeriod}</td>
+                        <td className="py-3 px-4">{row.totalQueryContributions.toLocaleString()}</td>
+                        <td className="py-3 px-4">
+                          {row.contributionSharePct ? `${Number(row.contributionSharePct).toFixed(2)}%` : '—'}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                              row.status === 'paid'
+                                ? 'bg-emerald-500/10 text-emerald-600'
+                                : row.status === 'pending_payout' || row.status === 'confirmed'
+                                ? 'bg-amber-500/10 text-amber-600'
+                                : 'bg-muted text-muted-foreground'
+                            }`}
+                          >
+                            {row.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-xs text-muted-foreground truncate max-w-[200px]">
+                          {row.stripeTransferId || row.notes || '—'}
+                        </td>
+                        <td className="py-3 px-4 text-right font-bold text-emerald-600">
+                          {formatCurrency(Number(row.creatorNetEarnings || 0))}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       </main>

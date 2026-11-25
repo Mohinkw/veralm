@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 
 export default function ContactPage() {
@@ -43,7 +44,9 @@ export default function ContactPage() {
         {/* Form */}
         {submitted ? (
           <div className="bg-green-900/30 border border-green-700 rounded-xl p-8 text-center">
-            <div className="text-4xl mb-3">✅</div>
+            <div className="mb-3 flex justify-center">
+              <CheckCircle2 className="h-10 w-10 text-green-400" />
+            </div>
             <h2 className="text-xl font-bold text-green-300 mb-2">Message received!</h2>
             <p className="text-gray-400">We&apos;ll get back to you within 1–2 business days.</p>
           </div>

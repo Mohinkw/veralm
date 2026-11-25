@@ -3,6 +3,7 @@ import { inngest } from "@/inngest/client";
 import { verifyArticle, processEmbedding } from "@/inngest/functions";
 import { completeArticleWithdrawals, monitorArticleFreshness } from "@/inngest/article-lifecycle";
 import { syncMonthlyCreatorRevenue } from "@/inngest/revenue-sync";
+import { processMonthlyCreatorPayouts } from "@/inngest/payouts";
 
 // Create an API that serves zero-infrastructure background functions
 export const dynamic = "force-dynamic";
@@ -15,5 +16,6 @@ export const { GET, POST, PUT } = serve({
     completeArticleWithdrawals,
     monitorArticleFreshness,
     syncMonthlyCreatorRevenue,
+    processMonthlyCreatorPayouts,
   ],
 });

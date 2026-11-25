@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { Sparkles, Plus, Search, CheckCircle2, Clock, XCircle, AlertCircle, Eye, User } from 'lucide-react';
+import { Plus, Search, CheckCircle2, Clock, XCircle, AlertCircle, Eye, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { VeraLMLogo } from '@/components/veralm-logo';
 import { Input } from '@/components/ui/input';
 import { formatCurrency, formatRelativeTime } from '@/lib/utils';
 import { useAccount } from '@/lib/account-context';
@@ -75,7 +76,7 @@ export default function CreatorArticlesPage() {
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-6">
             <Link href="/" className="flex items-center gap-2 font-bold text-xl">
-              <Sparkles className="h-6 w-6 text-primary" />
+              <VeraLMLogo className="h-6 w-6" />
               <span>VeraLM</span>
               <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">Creator Studio</span>
             </Link>

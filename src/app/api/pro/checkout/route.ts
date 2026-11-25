@@ -32,6 +32,8 @@ export async function POST(request: NextRequest) {
         client_reference_id: auth.user.id,
         'metadata[userId]': auth.user.id,
         'metadata[billingCycle]': billingCycle,
+        'subscription_data[metadata][userId]': auth.user.id,
+        'subscription_data[metadata][billingCycle]': billingCycle,
       });
 
       const stripeRes = await fetch('https://api.stripe.com/v1/checkout/sessions', {

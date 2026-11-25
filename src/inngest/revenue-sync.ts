@@ -6,6 +6,7 @@ import {
   calculateRevenueDistribution,
   type PostRevenueInput,
 } from '@/lib/revenue/calculator';
+import { fetchGa4ArticleRevenue } from '@/lib/revenue/ga4';
 
 /**
  * Monthly revenue distribution cron (1st of each month at 05:00 UTC).
@@ -23,14 +24,16 @@ export const syncMonthlyCreatorRevenue = inngest.createFunction(
     }
 
     const now = new Date();
-    const prevMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
-    const revenuePeriod = `${prevMonth.getUTCFullYear()}-${String(prevMonth.getUTCMonth() + 1).padStart(2, '0')}`;
+    const prevMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+    const prevMonthEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0));
+    const revenuePeriod = `${prevMonthStart.getUTCFullYear()}-${String(prevMonthStart.getUTCMonth() + 1).padStart(2, '0')}`;
+    const startDate = prevMonthStart.toISOString().slice(0, 10);
+    const endDate = prevMonthEnd.toISOString().slice(0, 10);
 
     const monthlyServerCost = Number(process.env.MONTHLY_SERVER_COST_USD || '45');
 
-    // Placeholder hook: replace with @google-analytics/data RunReportRequest once GA4 is linked
     const ga4Rows = await step.run('fetch-ga4-ad-revenue', async () => {
-      return [] as Array<{ slug: string; views: number; adRevenue: number }>;
+      return await fetchGa4ArticleRevenue({ propertyId, startDate, endDate });
     });
 
     if (ga4Rows.length === 0) {

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Sparkles, ShieldCheck, BookOpen, Users, Award, Loader2 } from 'lucide-react';
+import { VeraLMLogo } from '@/components/veralm-logo';
 
 const LOADING_MESSAGES = [
   {
@@ -125,8 +126,8 @@ export function ChatLoadingStatus() {
 
       {/* VeraLM Branding Tag */}
       <div className="pt-1 border-t border-border/40 flex items-center justify-between text-[10px] text-muted-foreground font-mono">
-        <span className="flex items-center gap-1 text-primary">
-          <Sparkles className="h-2.5 w-2.5" />
+        <span className="flex items-center gap-1.5 text-primary">
+          <VeraLMLogo className="h-3.5 w-3.5" size={14} />
           VeraLM Model Grounding
         </span>
         <span className="text-[9px] uppercase tracking-wider text-muted-foreground/80">

@@ -14,6 +14,7 @@ import { db } from '@/db/client';
 import { articles, categories, creatorProfiles } from '@/db/schema';
 import { Button } from '@/components/ui/button';
 import { AdSlot } from '@/components/ad-slot';
+import { VeraLMLogo } from '@/components/veralm-logo';
 import { getSiteUrl } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -132,7 +133,7 @@ export default async function CategoryHubPage({ params }: Props) {
       <header className="border-b border-border sticky top-0 z-50 bg-background/95 backdrop-blur">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 font-bold text-xl">
-            <Sparkles className="h-6 w-6 text-primary" />
+            <VeraLMLogo className="h-6 w-6" />
             <span>VeraLM</span>
           </Link>
           <div className="flex items-center gap-3">

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { VeraLMLogo } from '@/components/veralm-logo';
 import {
   PenSquare,
   Sparkles,
@@ -290,9 +291,7 @@ export default function AIChatPage() {
         {/* Top Header */}
         <div className="flex items-center justify-between px-3 pt-3 pb-2 shrink-0">
           <Link href="/" className="flex items-center gap-2">
-            <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Sparkles className="h-4 w-4 text-primary" />
-            </div>
+            <VeraLMLogo className="h-7 w-7 rounded-lg" size={28} />
             <span className="font-bold text-base tracking-tight">VeraLM</span>
           </Link>
           <div className="flex items-center gap-1">
@@ -494,7 +493,7 @@ export default function AIChatPage() {
               <Menu className="h-5 w-5" />
             </button>
             <div className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-border bg-card/80 backdrop-blur text-xs font-medium">
-              <Sparkles className="h-3.5 w-3.5 text-primary" />
+              <VeraLMLogo className="h-3.5 w-3.5" size={14} />
               <span>VeraLM 2.0</span>
             </div>
           </div>
@@ -541,8 +540,8 @@ export default function AIChatPage() {
           <div className="flex-1 flex flex-col items-center justify-center px-4 pb-12 pt-20 overflow-y-auto">
             <div className="w-full max-w-2xl text-center space-y-6">
               <div className="space-y-2">
-                <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary mb-2">
-                  <Sparkles className="h-6 w-6" />
+                <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl mb-2">
+                  <VeraLMLogo className="h-12 w-12 rounded-2xl" size={48} />
                 </div>
                 <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
                   VeraLM AI Model
@@ -639,8 +638,8 @@ export default function AIChatPage() {
                     {/* Assistant Message */}
                     {msg.role === 'assistant' && (
                       <div className="flex gap-3">
-                        <div className="shrink-0 mt-0.5 h-7 w-7 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
-                          <Sparkles className="h-4 w-4 text-primary" />
+                        <div className="shrink-0 mt-0.5 h-7 w-7 rounded-lg flex items-center justify-center">
+                          <VeraLMLogo className="h-7 w-7 rounded-lg" size={28} />
                         </div>
 
                         <div className="flex-1 min-w-0">
@@ -706,7 +705,7 @@ export default function AIChatPage() {
                                     </button>
 
                                     <span className="ml-auto text-[11px] text-muted-foreground">
-                                      {msg.response.was_cached ? '⚡ cached' : `${msg.response.latency_ms}ms`}
+                                      {msg.response.was_cached ? 'cached' : `${msg.response.latency_ms}ms`}
                                     </span>
                                   </>
                                 )}

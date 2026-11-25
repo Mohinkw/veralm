@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { Award, BookOpen, ShieldCheck, Sparkles, Trophy } from 'lucide-react';
+import { Award, BookOpen, ShieldCheck, Trophy } from 'lucide-react';
+import { VeraLMLogo } from '@/components/veralm-logo';
 import { desc, eq } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { creatorProfiles } from '@/db/schema';
@@ -60,7 +61,7 @@ export default async function LeaderboardPage() {
       <header className="border-b border-border sticky top-0 z-50 bg-background/95 backdrop-blur">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 font-bold text-xl">
-            <Sparkles className="h-6 w-6 text-primary" />
+            <VeraLMLogo className="h-6 w-6" />
             <span>VeraLM</span>
           </Link>
           <div className="flex items-center gap-3">

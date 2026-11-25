@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Target, Globe, DollarSign } from "lucide-react";
 
 export const metadata = {
   title: "Careers | VeraLM",
@@ -59,27 +60,32 @@ export default function CareersPage() {
       <section className="max-w-4xl mx-auto px-6 py-14 grid sm:grid-cols-3 gap-6">
         {[
           {
-            icon: "🎯",
+            icon: Target,
             title: "Mission-first",
             desc: "We work on hard problems that matter: ensuring expert knowledge is fairly valued in the AI era.",
           },
           {
-            icon: "🌍",
+            icon: Globe,
             title: "Fully remote",
             desc: "No offices. No commutes. Work from wherever you do your best thinking.",
           },
           {
-            icon: "💰",
+            icon: DollarSign,
             title: "Competitive equity",
             desc: "Early employees share meaningfully in VeraLM's upside. Transparent salary bands.",
           },
-        ].map((v) => (
-          <div key={v.title} className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-            <div className="text-3xl mb-3">{v.icon}</div>
-            <h3 className="font-bold text-white mb-1">{v.title}</h3>
-            <p className="text-gray-400 text-sm leading-relaxed">{v.desc}</p>
-          </div>
-        ))}
+        ].map((v) => {
+          const Icon = v.icon;
+          return (
+            <div key={v.title} className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10 text-blue-400">
+                <Icon className="h-5 w-5" />
+              </div>
+              <h3 className="font-bold text-white mb-1">{v.title}</h3>
+              <p className="text-gray-400 text-sm leading-relaxed">{v.desc}</p>
+            </div>
+          );
+        })}
       </section>
 
       {/* Roles */}

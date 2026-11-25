@@ -16,6 +16,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { VeraLMLogo } from '@/components/veralm-logo';
 import { useAccount } from '@/lib/account-context';
 import { supabase } from '@/lib/supabase';
 
@@ -23,6 +24,9 @@ type Article = {
   id: string;
   title: string;
   status: string;
+  submitted_at: string | null;
+  created_at: string | null;
+  composite_quality_score: number | null;
   total_query_contributions: number | null;
   total_earnings_attributed: number | null;
 };
@@ -60,7 +64,27 @@ export default function CreatorAnalyticsPage() {
     loadArticles();
   }, []);
 
-  const totalCitations = articles.reduce((sum, a) => sum + (a.total_query_contributions || 0), 0);
+  const rangeDays = range === '7d' ? 7 : range === '30d' ? 30 : 90;
+  const cutoffMs = Date.now() - rangeDays * 24 * 60 * 60 * 1000;
+  const filteredArticles = articles.filter((a) => {
+    const ts = a.submitted_at || a.created_at;
+    if (!ts) return true;
+    const ms = new Date(ts).getTime();
+    return Number.isFinite(ms) ? ms >= cutoffMs : true;
+  });
+
+  const totalCitations = filteredArticles.reduce((sum, a) => sum + (a.total_query_contributions || 0), 0);
+  const approvedArticles = filteredArticles.filter((a) => a.status === 'approved');
+  const scoredArticles = filteredArticles.filter((a) => a.composite_quality_score !== null && a.composite_quality_score !== undefined);
+  const avgQuality =
+    scoredArticles.length > 0
+      ? `${(scoredArticles.reduce((sum, a) => sum + Number(a.composite_quality_score || 0), 0) / scoredArticles.length).toFixed(0)}%`
+      : 'N/A';
+  const citedApprovedCount = approvedArticles.filter((a) => (a.total_query_contributions || 0) > 0).length;
+  const attributionRate =
+    approvedArticles.length > 0
+      ? `${Math.round((citedApprovedCount / approvedArticles.length) * 100)}%`
+      : 'N/A';
   const displayName = user.name || user.email?.split('@')[0] || 'Creator';
   const initial = displayName.charAt(0).toUpperCase();
 
@@ -71,7 +95,7 @@ export default function CreatorAnalyticsPage() {
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-6">
             <Link href="/" className="flex items-center gap-2 font-bold text-xl">
-              <Sparkles className="h-6 w-6 text-primary" />
+              <VeraLMLogo className="h-6 w-6" />
               <span>VeraLM</span>
               <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">Creator Studio</span>
             </Link>
@@ -128,20 +152,20 @@ export default function CreatorAnalyticsPage() {
 
             <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Active Vault Articles</span>
-              <div className="text-3xl font-black mt-2">{articles.filter(a => a.status === 'approved').length}</div>
-              <p className="text-xs text-muted-foreground mt-1">Verified indexed articles</p>
+              <div className="text-3xl font-black mt-2">{approvedArticles.length}</div>
+              <p className="text-xs text-muted-foreground mt-1">Verified indexed ({range.toUpperCase()})</p>
             </div>
 
             <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Avg Quality Score</span>
-              <div className="text-3xl font-black mt-2">{articles.length > 0 ? '95%' : 'N/A'}</div>
+              <div className="text-3xl font-black mt-2">{avgQuality}</div>
               <p className="text-xs text-muted-foreground mt-1">AI and editorial audits</p>
             </div>
 
             <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Attribution Rate</span>
-              <div className="text-3xl font-black mt-2">{articles.length > 0 ? '100%' : 'N/A'}</div>
-              <p className="text-xs text-muted-foreground mt-1">Ground-truth attribution</p>
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Citation Coverage</span>
+              <div className="text-3xl font-black mt-2">{attributionRate}</div>
+              <p className="text-xs text-muted-foreground mt-1">Approved articles cited</p>
             </div>
           </div>
 
@@ -167,7 +191,7 @@ export default function CreatorAnalyticsPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {articles.filter(a => (a.total_query_contributions || 0) > 0).map((art) => (
+                {filteredArticles.filter(a => (a.total_query_contributions || 0) > 0).map((art) => (
                   <div key={art.id} className="p-4 rounded-xl border border-border bg-card shadow-sm flex items-center justify-between">
                     <div>
                       <div className="text-sm font-semibold text-foreground">{art.title}</div>
