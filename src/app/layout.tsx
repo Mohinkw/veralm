@@ -122,6 +122,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="https://fonts.gstatic.com"
           crossOrigin="anonymous"
         />
+        {adsenseClientId && (
+          <>
+            <meta name="google-adsense-account" content={adsenseClientId} />
+            <script
+              async
+              src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsenseClientId}`}
+              crossOrigin="anonymous"
+            />
+          </>
+        )}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -148,14 +158,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               {`window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', '${gaMeasurementId}', { page_path: window.location.pathname });`}
             </Script>
           </>
-        )}
-        {adsenseClientId && (
-          <Script
-            async
-            src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsenseClientId}`}
-            crossOrigin="anonymous"
-            strategy="afterInteractive"
-          />
         )}
         {posthogKey && (
           <Script id="posthog-init" strategy="afterInteractive">
