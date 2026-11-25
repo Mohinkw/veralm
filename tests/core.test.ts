@@ -13,6 +13,7 @@ import {
   verifyCitationToken,
 } from '../src/lib/citation-token';
 import { verifyStripeSignature } from '../src/lib/stripe-webhook';
+import { verifyPolarWebhookSignature } from '../src/lib/polar-webhook';
 import { extractArticleSlugFromPath } from '../src/lib/revenue/ga4';
 import { parseSentryDsn } from '../src/lib/observability';
 
@@ -117,6 +118,27 @@ test('verifyStripeSignature validates HMAC-SHA256 signatures and rejects tampere
   assert.equal(verifyStripeSignature(payload, `t=${now},v1=deadbeef`, secret, 300, now + 10), false);
   assert.equal(verifyStripeSignature(payload, `t=${now},v1=${sig}`, secret, 300, now + 400), false);
   assert.equal(verifyStripeSignature(payload, null, secret, 300, now), false);
+});
+
+test('verifyPolarWebhookSignature validates Standard Webhooks HMAC-SHA256 signatures', () => {
+  const rawSecret = Buffer.from('polar_test_key_32_bytes_minimum!!').toString('base64');
+  const secret = `whsec_${rawSecret}`;
+  const payload = JSON.stringify({ type: 'subscription.active', data: { status: 'active' } });
+  const id = 'msg_123';
+  const now = 1700000000;
+  const sig = crypto
+    .createHmac('sha256', Buffer.from(rawSecret, 'base64'))
+    .update(`${id}.${now}.${payload}`)
+    .digest('base64');
+
+  assert.equal(
+    verifyPolarWebhookSignature(payload, { id, timestamp: String(now), signature: `v1,${sig}` }, secret, 300, now + 5),
+    true
+  );
+  assert.equal(
+    verifyPolarWebhookSignature(payload, { id, timestamp: String(now), signature: 'v1,invalid==' }, secret, 300, now + 5),
+    false
+  );
 });
 
 test('extractArticleSlugFromPath parses /articles/<slug> paths', () => {

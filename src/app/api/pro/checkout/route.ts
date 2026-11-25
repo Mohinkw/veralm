@@ -14,6 +14,48 @@ export async function POST(request: NextRequest) {
     const billingCycle = body.billingCycle === 'annual' ? 'annual' : 'monthly';
     const siteUrl = getSiteUrl();
 
+    const polarToken = process.env.POLAR_ACCESS_TOKEN;
+    const polarProductId =
+      billingCycle === 'annual'
+        ? process.env.POLAR_PRO_ANNUAL_PRODUCT_ID
+        : process.env.POLAR_PRO_MONTHLY_PRODUCT_ID;
+
+    // Primary path: Polar.sh Checkout Session (Merchant of Record)
+    if (polarToken && polarProductId) {
+      const polarBase =
+        process.env.POLAR_SERVER === 'sandbox'
+          ? 'https://sandbox-api.polar.sh/v1'
+          : 'https://api.polar.sh/v1';
+
+      const polarRes = await fetch(`${polarBase}/checkouts/`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${polarToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          products: [polarProductId],
+          success_url: `${siteUrl}/pro?upgraded=1`,
+          customer_email: auth.user.email || undefined,
+          external_customer_id: auth.user.id,
+          metadata: {
+            userId: auth.user.id,
+            billingCycle,
+          },
+        }),
+      });
+
+      const checkout = await polarRes.json();
+      if (!polarRes.ok || !checkout.url) {
+        return NextResponse.json(
+          { error: checkout.detail || checkout.error || 'Polar checkout failed.' },
+          { status: 502 }
+        );
+      }
+
+      return NextResponse.json({ url: checkout.url });
+    }
+
     const stripeKey = process.env.STRIPE_SECRET_KEY;
     const priceId =
       billingCycle === 'annual'
