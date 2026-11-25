@@ -29,4 +29,5 @@ export default withSentryConfig(nextConfig, {
   org: 'veralm',
   project: 'veralm',
   silent: !process.env.CI,
+  tunnelRoute: false,
 });
