@@ -117,7 +117,7 @@ export default function CreatorLandingPage() {
                 </li>
                 <li className="flex items-start gap-3">
                   <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
-                  <span><strong>60% Revenue Share:</strong> Direct monthly payout distributions from all platform search revenue.</span>
+                  <span><strong>Up to 90% Revenue Share:</strong> Direct monthly payout distributions from net platform revenue after infrastructure expenses (10% platform fee).</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />

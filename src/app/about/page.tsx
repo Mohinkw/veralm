@@ -154,33 +154,27 @@ export default function AboutPage() {
               <div className="space-y-4 text-sm">
                 <div>
                   <div className="flex justify-between font-medium mb-1.5">
-                    <span>Creator Royalties Pool</span>
-                    <span className="text-primary font-bold">60%</span>
+                    <span>Creator Royalties Pool (After Infrastructure)</span>
+                    <span className="text-primary font-bold">Up to 90%</span>
                   </div>
                   <div className="w-full h-3 bg-muted rounded-full overflow-hidden">
-                    <div className="h-full bg-primary rounded-full" style={{ width: '60%' }}></div>
+                    <div className="h-full bg-primary rounded-full" style={{ width: '90%' }}></div>
                   </div>
                 </div>
 
                 <div>
                   <div className="flex justify-between font-medium mb-1.5">
-                    <span>Platform Operations & Maintenance</span>
-                    <span className="text-muted-foreground font-semibold">25%</span>
+                    <span>Platform Fee</span>
+                    <span className="text-muted-foreground font-semibold">10%</span>
                   </div>
                   <div className="w-full h-3 bg-muted rounded-full overflow-hidden">
-                    <div className="h-full bg-muted-foreground/50 rounded-full" style={{ width: '25%' }}></div>
+                    <div className="h-full bg-muted-foreground/50 rounded-full" style={{ width: '10%' }}></div>
                   </div>
                 </div>
 
-                <div>
-                  <div className="flex justify-between font-medium mb-1.5">
-                    <span>LLM Inference & Vector Infrastructure</span>
-                    <span className="text-muted-foreground font-semibold">15%</span>
-                  </div>
-                  <div className="w-full h-3 bg-muted rounded-full overflow-hidden">
-                    <div className="h-full bg-muted-foreground/30 rounded-full" style={{ width: '15%' }}></div>
-                  </div>
-                </div>
+                <p className="text-xs text-muted-foreground pt-1">
+                  Server, LLM inference, and vector storage infrastructure costs are deducted first; creators receive 90% of all remaining net revenue.
+                </p>
               </div>
 
               <div className="mt-8 pt-6 border-t border-border flex justify-between items-center text-xs text-muted-foreground">
