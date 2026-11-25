@@ -154,7 +154,7 @@ export default function CategoriesPage() {
                         <Icon className="h-6 w-6" />
                       </div>
                       <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
-                        {category.count} Verified Articles
+                        Verified Knowledge
                       </span>
                     </div>
 
