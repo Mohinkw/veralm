@@ -16,7 +16,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { VeraLMLogo } from '@/components/veralm-logo';
+import { CreatorHeader } from '@/components/creator-header';
 import { useAccount } from '@/lib/account-context';
 import { supabase } from '@/lib/supabase';
 
@@ -91,46 +91,24 @@ export default function CreatorAnalyticsPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Top Navbar */}
-      <header className="border-b border-border sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <Link href="/" className="flex items-center gap-2 font-bold text-xl">
-              <VeraLMLogo className="h-6 w-6" />
-              <span>VeraLM</span>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">Creator Studio</span>
-            </Link>
-            <nav className="hidden md:flex items-center gap-4 text-sm font-medium">
-              <Link href="/creators/dashboard" className="text-muted-foreground hover:text-foreground">Overview</Link>
-              <Link href="/creators/articles" className="text-muted-foreground hover:text-foreground">My Articles</Link>
-              <Link href="/creators/earnings" className="text-muted-foreground hover:text-foreground">Earnings & Payouts</Link>
-              <Link href="/creators/analytics" className="text-foreground">Analytics</Link>
-            </nav>
+      <CreatorHeader
+        activeTab="analytics"
+        rightSlot={
+          <div className="flex items-center gap-1">
+            {(['7d', '30d', '90d'] as const).map((r) => (
+              <button
+                key={r}
+                onClick={() => setRange(r)}
+                className={`text-xs px-2 sm:px-2.5 py-1 rounded-md font-medium transition-all ${
+                  range === r ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                }`}
+              >
+                {r === '7d' ? '7D' : r === '30d' ? '30D' : '90D'}
+              </button>
+            ))}
           </div>
-
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-1">
-              {(['7d', '30d', '90d'] as const).map((r) => (
-                <button
-                  key={r}
-                  onClick={() => setRange(r)}
-                  className={`text-xs px-2.5 py-1 rounded-md font-medium transition-all ${
-                    range === r ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
-                  }`}
-                >
-                  {r === '7d' ? '7D' : r === '30d' ? '30D' : '90D'}
-                </button>
-              ))}
-            </div>
-            <Link
-              href="/creators/profile"
-              className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold hover:ring-2 hover:ring-primary transition-all"
-              title={`${displayName} - Profile Settings`}
-            >
-              {initial}
-            </Link>
-          </div>
-        </div>
-      </header>
+        }
+      />
 
       {/* Main Content */}
       <main className="py-8 px-4">

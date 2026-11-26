@@ -138,10 +138,13 @@ export default function AIChatPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Load stored convs on mount
+  // Load stored convs on mount + collapse sidebar by default on mobile
   useEffect(() => {
     setConvs(loadConvs());
     setCurrentId(crypto.randomUUID());
+    if (window.innerWidth < 768) {
+      setSidebarOpen(false);
+    }
 
     // Check URL query param e.g. /?q=...
     const params = new URLSearchParams(window.location.search);
@@ -289,13 +292,24 @@ export default function AIChatPage() {
   const isEmpty = messages.length === 0;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background text-foreground">
+    <div className="flex h-[100dvh] overflow-hidden bg-background text-foreground relative">
+      {/* Mobile Sidebar Backdrop */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/50 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
       {/* ════════════ SIDEBAR ════════════ */}
       <aside
         className={cn(
-          'flex flex-col shrink-0 overflow-hidden transition-all duration-200 border-r border-border',
+          'flex flex-col shrink-0 transition-all duration-200 border-r border-border',
           'bg-card dark:bg-[#171717]',
-          sidebarOpen ? 'w-64' : 'w-0'
+          sidebarOpen
+            ? 'fixed inset-y-0 left-0 z-40 w-72 max-w-[85vw] shadow-2xl overflow-visible md:static md:z-auto md:w-64 md:shadow-none'
+            : 'w-0 overflow-hidden border-r-0'
         )}
       >
         {/* Top Header */}
@@ -411,7 +425,7 @@ export default function AIChatPage() {
         {/* Footer Account Card with Hamburger Menu */}
         <div className="p-3 border-t border-border shrink-0 relative">
           {accountMenuOpen && (
-            <div className="absolute bottom-full left-2 right-2 mb-2 rounded-xl border border-border bg-popover text-popover-foreground shadow-lg p-1.5 z-30 space-y-0.5 max-h-[75vh] overflow-y-auto">
+            <div className="absolute bottom-full left-2 right-2 mb-2 rounded-xl border border-border bg-popover text-popover-foreground shadow-lg p-1.5 z-50 space-y-0.5">
               <Link
                 href={user.isLoggedIn ? '/creators/dashboard' : '/creators'}
                 onClick={() => setAccountMenuOpen(false)}
@@ -431,8 +445,20 @@ export default function AIChatPage() {
                 </Link>
               )}
 
-              {/* Help expandable submenu */}
-              <div>
+              {/* Help submenu — hovers right on desktop, taps inline on mobile */}
+              <div
+                className="relative group/help"
+                onMouseEnter={() => {
+                  if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+                    setHelpMenuOpen(true);
+                  }
+                }}
+                onMouseLeave={() => {
+                  if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+                    setHelpMenuOpen(false);
+                  }
+                }}
+              >
                 <button
                   type="button"
                   onClick={() => setHelpMenuOpen((o) => !o)}
@@ -443,35 +469,33 @@ export default function AIChatPage() {
                     <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
                     <span>Help</span>
                   </span>
-                  {helpMenuOpen ? (
-                    <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                  ) : (
-                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                  )}
+                  <ChevronRight className={cn('h-3.5 w-3.5 text-muted-foreground transition-transform md:rotate-0', helpMenuOpen && 'rotate-90 md:rotate-0')} />
                 </button>
                 {helpMenuOpen && (
-                  <div className="ml-4 pl-2 border-l border-border space-y-0.5 my-0.5">
-                    {[
-                      { href: '/about', label: 'Who We Are' },
-                      { href: '/contact', label: 'Help Center' },
-                      { href: '/privacy', label: 'Privacy Policy' },
-                      { href: '/terms', label: 'Terms of Service' },
-                      { href: '/licensing', label: 'Licensing' },
-                      { href: '/blog', label: 'Release Notes & Blog' },
-                      { href: '/careers', label: 'Careers' },
-                    ].map(({ href, label }) => (
-                      <Link
-                        key={href}
-                        href={href}
-                        onClick={() => {
-                          setAccountMenuOpen(false);
-                          setHelpMenuOpen(false);
-                        }}
-                        className="block px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                      >
-                        {label}
-                      </Link>
-                    ))}
+                  <div className="ml-4 pl-2 border-l border-border space-y-0.5 my-0.5 md:ml-0 md:border-l-0 md:my-0 md:absolute md:left-full md:bottom-0 md:pl-2 md:w-52 md:z-50">
+                    <div className="md:rounded-xl md:border md:border-border md:bg-popover md:text-popover-foreground md:shadow-lg md:p-1.5 space-y-0.5">
+                      {[
+                        { href: '/about', label: 'Who We Are' },
+                        { href: '/contact', label: 'Help Center' },
+                        { href: '/privacy', label: 'Privacy Policy' },
+                        { href: '/terms', label: 'Terms of Service' },
+                        { href: '/licensing', label: 'Licensing' },
+                        { href: '/blog', label: 'Release Notes & Blog' },
+                        { href: '/careers', label: 'Careers' },
+                      ].map(({ href, label }) => (
+                        <Link
+                          key={href}
+                          href={href}
+                          onClick={() => {
+                            setAccountMenuOpen(false);
+                            setHelpMenuOpen(false);
+                          }}
+                          className="block px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                        >
+                          {label}
+                        </Link>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -563,7 +587,7 @@ export default function AIChatPage() {
       {/* ════════════ MAIN CONTENT ════════════ */}
       <main className="flex-1 flex flex-col min-w-0 relative bg-background">
         {/* Floating Topbar */}
-        <header className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 py-3 pointer-events-none">
+        <header className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-3 sm:px-4 py-3 pointer-events-none">
           <div className="flex items-center gap-2 pointer-events-auto">
             <button
               onClick={() => setSidebarOpen(o => !o)}
@@ -577,17 +601,17 @@ export default function AIChatPage() {
                 <PanelLeftOpen className="h-5 w-5" />
               )}
             </button>
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-border bg-card/80 backdrop-blur text-xs font-medium">
+            <div className="hidden xs:flex sm:flex items-center gap-1.5 px-3 py-1 rounded-full border border-border bg-card/80 backdrop-blur text-xs font-medium">
               <VeraLMLogo className="h-3.5 w-3.5" size={14} />
               <span>VeraLM</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 pointer-events-auto">
+          <div className="flex items-center gap-1.5 sm:gap-2 pointer-events-auto">
             {!user.isPro && (
               <Link
                 href="/pro"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition-colors"
+                className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-semibold border border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition-colors"
               >
                 <Crown className="h-3.5 w-3.5 text-amber-500" />
                 <span className="hidden sm:inline">Upgrade to Pro</span>
@@ -597,10 +621,11 @@ export default function AIChatPage() {
             {/* Earn as a Creator */}
             <Link
               href={user.isLoggedIn ? '/creators/dashboard' : '/creators'}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-semibold border transition-all bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20"
             >
               <TrendingUp className="h-3.5 w-3.5" />
-              <span>Earn as a Creator</span>
+              <span className="hidden sm:inline">Earn as a Creator</span>
+              <span className="sm:hidden">Earn</span>
             </Link>
 
             <ThemeToggle />

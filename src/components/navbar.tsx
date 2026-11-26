@@ -13,18 +13,18 @@ export function Navbar({ activePage }: { activePage?: string }) {
 
   return (
     <nav className="border-b border-border sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+      <div className="container mx-auto px-3 sm:px-4 h-16 flex items-center justify-between gap-2">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2 font-bold text-xl shrink-0">
+        <Link href="/" className="flex items-center gap-2 font-bold text-lg sm:text-xl shrink-0">
           <VeraLMLogo className="h-6 w-6" />
           <span>VeraLM</span>
         </Link>
 
         {/* Nav links */}
-        <div className="flex items-center gap-1 sm:gap-3">
+        <div className="flex items-center gap-1 sm:gap-2.5">
           <Link
             href="/"
-            className={`text-sm font-medium px-3 py-1.5 rounded-md transition-colors ${
+            className={`hidden md:inline-flex text-sm font-medium px-3 py-1.5 rounded-md transition-colors ${
               activePage === 'chat' || activePage === 'search'
                 ? 'text-primary bg-primary/10'
                 : 'text-muted-foreground hover:text-foreground hover:bg-accent'

@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { Plus, Search, CheckCircle2, Clock, XCircle, AlertCircle, Eye, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { VeraLMLogo } from '@/components/veralm-logo';
+import { CreatorHeader } from '@/components/creator-header';
 import { Input } from '@/components/ui/input';
 import { formatCurrency, formatRelativeTime } from '@/lib/utils';
 import { useAccount } from '@/lib/account-context';
@@ -72,39 +72,7 @@ export default function CreatorArticlesPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Top Navbar */}
-      <header className="border-b border-border sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <Link href="/" className="flex items-center gap-2 font-bold text-xl">
-              <VeraLMLogo className="h-6 w-6" />
-              <span>VeraLM</span>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">Creator Studio</span>
-            </Link>
-            <nav className="hidden md:flex items-center gap-4 text-sm font-medium">
-              <Link href="/creators/dashboard" className="text-muted-foreground hover:text-foreground">Overview</Link>
-              <Link href="/creators/articles" className="text-foreground">My Articles</Link>
-              <Link href="/creators/earnings" className="text-muted-foreground hover:text-foreground">Earnings & Payouts</Link>
-              <Link href="/creators/analytics" className="text-muted-foreground hover:text-foreground">Analytics</Link>
-            </nav>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <Link href="/creators/articles/new">
-              <Button size="sm" className="gap-1.5 text-xs">
-                <Plus className="h-4 w-4" />
-                Submit Article
-              </Button>
-            </Link>
-            <Link
-              href="/creators/profile"
-              className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold hover:ring-2 hover:ring-primary transition-all"
-              title={`${displayName} - Profile Settings`}
-            >
-              {initial}
-            </Link>
-          </div>
-        </div>
-      </header>
+      <CreatorHeader activeTab="articles" />
 
       {/* Main Content */}
       <main className="py-8 px-4">
@@ -154,7 +122,7 @@ export default function CreatorArticlesPage() {
           </div>
 
           {/* Articles Table */}
-          <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
+          <div className="bg-card border border-border rounded-xl overflow-x-auto shadow-sm">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-border bg-muted/40 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
