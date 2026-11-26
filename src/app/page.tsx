@@ -828,10 +828,6 @@ export default function AIChatPage() {
                                     >
                                       <ThumbsDown className="h-3.5 w-3.5" />
                                     </button>
-
-                                    <span className="ml-auto text-[11px] text-muted-foreground">
-                                      {msg.response.was_cached ? 'cached' : `${msg.response.latency_ms}ms`}
-                                    </span>
                                   </>
                                 )}
                               </div>
