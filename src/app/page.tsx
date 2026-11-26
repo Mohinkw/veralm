@@ -17,26 +17,23 @@ import {
   Copy,
   ExternalLink,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   RotateCcw,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
-  Search,
   HelpCircle,
   Crown,
   LogOut,
   Loader2,
   DollarSign,
   MessageSquare,
-  LayoutDashboard,
-  FilePlus,
   FileText,
   TrendingUp,
   LogIn,
   UserCheck,
   User,
-  ArrowLeftRight,
 } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -126,7 +123,7 @@ function freshnessColor(s: string) {
    MAIN CHATBOT PAGE
 ════════════════════════════════════════════════════════════ */
 export default function AIChatPage() {
-  const { mode, toggleMode, user, logout } = useAccount();
+  const { user, logout } = useAccount();
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [convs, setConvs] = useState<StoredConv[]>([]);
@@ -135,6 +132,7 @@ export default function AIChatPage() {
   const [loading, setLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [helpMenuOpen, setHelpMenuOpen] = useState(false);
   const [sessionId] = useState(() => crypto.randomUUID());
 
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -329,91 +327,22 @@ export default function AIChatPage() {
           </button>
         </div>
 
-        {/* Account Mode Switcher Banner */}
-        <div className="px-2 pb-2 shrink-0">
-          <div className="p-2.5 rounded-xl bg-accent/60 border border-border/80 flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-xs font-semibold">
-                {mode === 'creator' ? (
-                  <>
-                    <DollarSign className="h-3.5 w-3.5 text-green-500" />
-                    <span>Creator Mode</span>
-                  </>
-                ) : (
-                  <>
-                    <User className="h-3.5 w-3.5 text-primary" />
-                    <span>User Mode</span>
-                  </>
-                )}
-              </div>
-              <button
-                onClick={toggleMode}
-                className="text-[11px] font-semibold text-primary hover:underline flex items-center gap-1"
-                title="Switch mode"
-              >
-                <ArrowLeftRight className="h-3 w-3" />
-                Switch
-              </button>
-            </div>
-            <p className="text-[11px] text-muted-foreground leading-tight">
-              {mode === 'creator'
-                ? 'Contribute content to train and ground the VeraLM AI model, earning royalties.'
-                : 'Frontier AI model trained and grounded on verified human creator knowledge.'}
-            </p>
-          </div>
-        </div>
-
         {/* Navigation list */}
         <nav className="px-2 space-y-0.5 shrink-0">
-          {mode === 'creator' ? (
-            <>
-              <Link
-                href="/creators/dashboard"
-                className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium text-foreground hover:bg-accent transition-colors"
-              >
-                <LayoutDashboard className="h-4 w-4 text-primary" />
-                <span>Creator Dashboard</span>
-              </Link>
-              <Link
-                href="/creators/articles/new"
-                className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium text-foreground hover:bg-accent transition-colors"
-              >
-                <FilePlus className="h-4 w-4 text-green-500" />
-                <span>Submit New Article</span>
-              </Link>
-              <Link
-                href="/creators/articles"
-                className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-              >
-                <FileText className="h-4 w-4" />
-                <span>My Articles</span>
-              </Link>
-              <Link
-                href="/creators/earnings"
-                className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-              >
-                <TrendingUp className="h-4 w-4 text-amber-500" />
-                <span>Royalties & Earnings</span>
-              </Link>
-            </>
-          ) : (
-            <>
-              <Link
-                href="/categories"
-                className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-              >
-                <Compass className="h-4 w-4" />
-                <span>Knowledge Vault</span>
-              </Link>
-              <Link
-                href="/about"
-                className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-              >
-                <BookOpen className="h-4 w-4" />
-                <span>How VeraLM Works</span>
-              </Link>
-            </>
-          )}
+          <Link
+            href="/categories"
+            className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+          >
+            <Compass className="h-4 w-4" />
+            <span>Knowledge Vault</span>
+          </Link>
+          <Link
+            href="/about"
+            className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+          >
+            <BookOpen className="h-4 w-4" />
+            <span>How VeraLM Works</span>
+          </Link>
         </nav>
 
         <div className="mx-3 my-2 border-t border-border shrink-0" />
@@ -482,30 +411,14 @@ export default function AIChatPage() {
         {/* Footer Account Card with Hamburger Menu */}
         <div className="p-3 border-t border-border shrink-0 relative">
           {accountMenuOpen && (
-            <div className="absolute bottom-full left-2 right-2 mb-2 rounded-xl border border-border bg-popover text-popover-foreground shadow-lg p-1.5 z-30 space-y-0.5">
+            <div className="absolute bottom-full left-2 right-2 mb-2 rounded-xl border border-border bg-popover text-popover-foreground shadow-lg p-1.5 z-30 space-y-0.5 max-h-[75vh] overflow-y-auto">
               <Link
-                href="/search"
+                href="/creators/dashboard"
                 onClick={() => setAccountMenuOpen(false)}
                 className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium hover:bg-accent transition-colors"
               >
-                <Search className="h-3.5 w-3.5 text-muted-foreground" />
-                <span>Search</span>
-              </Link>
-              <Link
-                href="/creators"
-                onClick={() => setAccountMenuOpen(false)}
-                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium hover:bg-accent transition-colors"
-              >
-                <DollarSign className="h-3.5 w-3.5 text-green-500" />
-                <span>For Creators</span>
-              </Link>
-              <Link
-                href="/about"
-                onClick={() => setAccountMenuOpen(false)}
-                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium hover:bg-accent transition-colors"
-              >
-                <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
-                <span>How It Works</span>
+                <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />
+                <span>Earn as a Creator</span>
               </Link>
               {!user.isPro && (
                 <Link
@@ -517,6 +430,53 @@ export default function AIChatPage() {
                   <span>Upgrade to Pro</span>
                 </Link>
               )}
+
+              {/* Help expandable submenu */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setHelpMenuOpen((o) => !o)}
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium hover:bg-accent transition-colors"
+                  aria-expanded={helpMenuOpen}
+                >
+                  <span className="flex items-center gap-2.5">
+                    <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span>Help</span>
+                  </span>
+                  {helpMenuOpen ? (
+                    <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                  ) : (
+                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                  )}
+                </button>
+                {helpMenuOpen && (
+                  <div className="ml-4 pl-2 border-l border-border space-y-0.5 my-0.5">
+                    {[
+                      { href: '/about', label: 'Who We Are' },
+                      { href: '/contact', label: 'Help Center' },
+                      { href: '/privacy', label: 'Privacy Policy' },
+                      { href: '/terms', label: 'Terms of Service' },
+                      { href: '/licensing', label: 'Licensing' },
+                      { href: '/blog', label: 'Release Notes & Blog' },
+                      { href: '/leaderboard', label: 'Leaderboard' },
+                      { href: '/careers', label: 'Careers' },
+                    ].map(({ href, label }) => (
+                      <Link
+                        key={href}
+                        href={href}
+                        onClick={() => {
+                          setAccountMenuOpen(false);
+                          setHelpMenuOpen(false);
+                        }}
+                        className="block px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                      >
+                        {label}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div className="my-1 border-t border-border" />
               {user.isLoggedIn ? (
                 <>
@@ -583,7 +543,7 @@ export default function AIChatPage() {
                   )}
                 </div>
                 <div className="text-[11px] text-muted-foreground truncate flex items-center gap-1">
-                  <span className="capitalize">{mode}</span> mode
+                  <span>{user.isLoggedIn ? user.email : 'Guest Account'}</span>
                 </div>
               </div>
             </button>
@@ -635,19 +595,14 @@ export default function AIChatPage() {
                 <span className="sm:hidden">Pro</span>
               </Link>
             )}
-            {/* Mode quick switch */}
-            <button
-              onClick={toggleMode}
-              className={cn(
-                'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all',
-                mode === 'creator'
-                  ? 'bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/30'
-                  : 'bg-accent/80 text-foreground border-border hover:bg-accent'
-              )}
+            {/* Earn as a Creator */}
+            <Link
+              href="/creators/dashboard"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20"
             >
-              <DollarSign className="h-3.5 w-3.5 text-green-500" />
-              <span>{mode === 'creator' ? 'Creator Mode' : 'Earn from Data'}</span>
-            </button>
+              <TrendingUp className="h-3.5 w-3.5" />
+              <span>Earn as a Creator</span>
+            </Link>
 
             <ThemeToggle />
 
