@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
         body: JSON.stringify({
           products: [polarProductId],
           success_url: `${siteUrl}/pro?upgraded=1`,
+          allow_discount_codes: false,
           customer_email: auth.user.email || undefined,
           external_customer_id: auth.user.id,
           metadata: {
