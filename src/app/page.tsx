@@ -203,10 +203,15 @@ export default function AIChatPage() {
       setLoading(true);
 
       try {
+        const history = messages
+          .filter((m) => m.content && !m.error)
+          .slice(-8)
+          .map((m) => ({ role: m.role, content: m.content }));
+
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: queryText.trim(), session_id: sessionId }),
+          body: JSON.stringify({ query: queryText.trim(), session_id: sessionId, history }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to generate response');

@@ -77,6 +77,62 @@ export function hasAnyAI(): boolean {
   return hasGemini() || hasOpenAI();
 }
 
+export interface ChatTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface GenerateChatOptions {
+  history?: ChatTurn[];
+  maxOutputTokens?: number;
+}
+
+function toGeminiHistory(history: ChatTurn[] = []) {
+  const cleaned = history
+    .filter((t) => (t.role === "user" || t.role === "assistant") && t.content.trim().length > 0)
+    .slice(-8);
+
+  // Gemini startChat history must begin with a 'user' turn
+  const firstUserIdx = cleaned.findIndex((t) => t.role === "user");
+  const sliced = firstUserIdx >= 0 ? cleaned.slice(firstUserIdx) : [];
+
+  return sliced.map((t) => ({
+    role: t.role === "assistant" ? ("model" as const) : ("user" as const),
+    parts: [{ text: t.content.slice(0, 2000) }],
+  }));
+}
+
+/**
+ * Rewrites a follow-up question into a standalone Knowledge Vault search query
+ * using recent conversation context (e.g. resolving "they" / "it").
+ */
+export async function rewriteFollowUpQuery(
+  query: string,
+  history: ChatTurn[]
+): Promise<string> {
+  if (!history || history.length === 0) return query;
+
+  const recent = history
+    .slice(-4)
+    .map((t) => `${t.role === "user" ? "User" : "Assistant"}: ${t.content.slice(0, 350)}`)
+    .join("\n");
+
+  const rewritePrompt = `Given the conversation below, rewrite the latest follow-up question into a concise standalone search query (max 20 words) that resolves any pronouns or references. Output ONLY the rewritten query, nothing else.\n\nConversation:\n${recent}\n\nLatest question: ${query}`;
+
+  try {
+    const res = await generateChatAnswer(
+      "You rewrite follow-up questions into standalone search queries. Output only the query text.",
+      rewritePrompt,
+      0.0,
+      { maxOutputTokens: 60 }
+    );
+    const rewritten = res.answer.replace(/^["']|["']$/g, "").trim();
+    return rewritten && res.source === "gemini" ? rewritten : query;
+  } catch {
+    return query;
+  }
+}
+
 /**
  * Generate a chat answer following the strict priority formula:
  * Google Gemini Pool (Rotates across all free API keys) → Static Fallback.
@@ -87,9 +143,12 @@ export function hasAnyAI(): boolean {
 export async function generateChatAnswer(
   systemPrompt: string,
   userPrompt: string,
-  temperature = 0.2
+  temperature = 0.1,
+  options?: GenerateChatOptions
 ): Promise<{ answer: string; modelUsed: string; source: string }> {
   const geminiKeys = getGeminiKeys();
+  const maxOutputTokens = options?.maxOutputTokens ?? 900;
+  const geminiHistory = toGeminiHistory(options?.history);
 
   // ─── TIER 1: Google Gemini Multi-Key Rotation Pool ───
   if (geminiKeys.length > 0) {
@@ -111,12 +170,15 @@ export async function generateChatAnswer(
             model: modelName,
             generationConfig: {
               temperature,
-              maxOutputTokens: 2500,
+              maxOutputTokens,
             },
             systemInstruction: systemPrompt,
           });
 
-          const result = await model.generateContent(userPrompt);
+          const result =
+            geminiHistory.length > 0
+              ? await model.startChat({ history: geminiHistory }).sendMessage(userPrompt)
+              : await model.generateContent(userPrompt);
           const answer = result.response.text();
 
           if (answer && answer.trim()) {

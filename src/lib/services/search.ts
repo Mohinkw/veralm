@@ -1,6 +1,6 @@
 import { supabase, createServerClient } from '@/lib/supabase';
 import { executeRawSQL } from '@/db/client';
-import { generateChatAnswer, generateEmbedding, hasAnyAI } from '@/lib/ai-providers';
+import { generateChatAnswer, generateEmbedding, hasAnyAI, type ChatTurn } from '@/lib/ai-providers';
 import { createCitationToken } from '@/lib/citation-token';
 import type {
   FreshnessStatus,
@@ -221,7 +221,8 @@ export async function searchKnowledgeBase(query: string): Promise<{
  */
 export async function synthesizeSearchAnswer(
   query: string,
-  vaultResults: SearchVaultRow[]
+  vaultResults: SearchVaultRow[],
+  options?: { history?: ChatTurn[]; regionHint?: string | null }
 ): Promise<{
   answer: string;
   aiSource: string;
@@ -240,6 +241,8 @@ export async function synthesizeSearchAnswer(
     return { answer: fallbackAnswer, aiSource: 'fallback' };
   }
 
+  const regionLine = options?.regionHint ? `\nUser region context (non-PII): ${options.regionHint}` : '';
+
   if (vaultResults.length > 0) {
     const context = vaultResults
       .map(
@@ -248,28 +251,32 @@ export async function synthesizeSearchAnswer(
       )
       .join('\n\n---\n\n');
 
-    const systemPrompt = `You are VeraLM, a frontier AI model trained and grounded directly on verified human knowledge and expert creator publications.
-Your synthesis is authoritative, deep, clear, articulate, and well-structured—delivering model inference of the highest caliber.
+    const systemPrompt = `You are VeraLM, answering questions using verified human-written articles from the VeraLM Knowledge Vault.
 
-Instructions:
-1. Deliver a comprehensive, beautifully formatted response directly addressing the prompt (using clear markdown headings, concise paragraphs, bullet points, and code blocks if technical).
-2. Integrate the verified creator knowledge provided below as model ground truth. Reference findings naturally and cite sources where helpful (e.g. [1], [2]).
-3. If the prompt covers topics beyond what the source excerpts provide, answer thoroughly using your full model intelligence. Always provide a complete and deeply satisfying response.
-4. Do not include repetitive disclaimers, apologies, or boilerplate phrases. Synthesize directly.`;
+Rules:
+1. Answer ONLY what the user asked, matching the length and scope of their question. Short questions get short, direct answers (2-5 sentences or the exact relevant lines). Do NOT pad with extra background or unnecessary headings.
+2. Preserve the original article's wording, terminology, facts, and phrasing as closely as possible. Quote or extract directly with minimal stitching—avoid rewriting into generic AI-sounding prose.
+3. Rely strictly on the verified excerpts provided below when they answer the question, and cite sources inline as [1], [2]. Only use outside knowledge if the excerpts do not cover a part of a follow-up question.
+4. No filler, disclaimers, or repetitive intros.${regionLine}`;
 
-    const userPrompt = `User Prompt: ${query}\n\nVerified Knowledge from VeraLM Database:\n${context}`;
-    const result = await generateChatAnswer(systemPrompt, userPrompt);
+    const userPrompt = `Question: ${query}\n\nVerified Knowledge Vault Excerpts:\n${context}`;
+    const result = await generateChatAnswer(systemPrompt, userPrompt, 0.1, {
+      history: options?.history,
+      maxOutputTokens: 900,
+    });
     return { answer: result.answer, aiSource: result.source, modelUsed: result.modelUsed };
   }
 
-  const systemPrompt = `You are VeraLM, a cutting-edge AI model trained on global knowledge and updated intelligence.
-Your responses are authoritative, clear, articulate, and well-structured—delivering model inference of the highest caliber.
+  const systemPrompt = `You are VeraLM, a helpful AI assistant. No matching article was found in the VeraLM Knowledge Vault for this question, so answer using your own knowledge.
 
-Instructions:
-1. Directly answer the user prompt with high accuracy, clarity, and depth.
-2. Structure your response with clean markdown formatting (headings, bullet points, clear paragraphs, code formatting where applicable).
-3. Deliver deep, direct model intelligence without unnecessary fluff, disclaimers, or generic apologies.`;
+Rules:
+1. Be concise, direct, and factual—match the length of your reply to the question.
+2. Continue the conversation naturally using prior turns when relevant.
+3. No boilerplate disclaimers or unnecessary padding.${regionLine}`;
 
-  const result = await generateChatAnswer(systemPrompt, query);
+  const result = await generateChatAnswer(systemPrompt, query, 0.2, {
+    history: options?.history,
+    maxOutputTokens: 900,
+  });
   return { answer: result.answer, aiSource: result.source, modelUsed: result.modelUsed };
 }
