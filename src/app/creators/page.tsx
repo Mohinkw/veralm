@@ -1,13 +1,72 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
-import { DollarSign, Shield, BookOpen, ArrowRight, CheckCircle2, TrendingUp, Users, Award, Lock } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { DollarSign, Shield, BookOpen, ArrowRight, CheckCircle2, TrendingUp, Users, Award, Lock, Mail, User, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Navbar } from '@/components/navbar';
 import { useAccount } from '@/lib/account-context';
+import { supabase } from '@/lib/supabase';
 
 export default function CreatorLandingPage() {
+  const router = useRouter();
   const { user } = useAccount();
+
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: name,
+            role: 'user',
+          },
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=/creators/dashboard`,
+        },
+      });
+
+      if (signUpError) {
+        setError(signUpError.message);
+        return;
+      }
+
+      if (data?.session) {
+        router.push('/creators/dashboard');
+      } else {
+        setSuccessMessage('Account created! Check your email to confirm, then sign in to access your Creator Dashboard.');
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create account. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleSignUp = async () => {
+    setError(null);
+    const { error: oauthError } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback?next=/creators/dashboard`,
+      },
+    });
+    if (oauthError) setError(oauthError.message);
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -73,15 +132,15 @@ export default function CreatorLandingPage() {
               </>
             ) : (
               <>
-                <Link href="/creators/apply">
+                <a href="#creator-signup">
                   <Button size="lg" className="gap-2 text-base px-8 py-6 rounded-xl">
-                    Become a Data Provider
+                    Sign Up as a Creator
                     <ArrowRight className="h-5 w-5" />
                   </Button>
-                </Link>
+                </a>
                 <Link href="/login">
                   <Button size="lg" variant="outline" className="text-base px-8 py-6 rounded-xl">
-                    Sign In to Dashboard
+                    Already Signed Up? Sign In
                   </Button>
                 </Link>
               </>
@@ -198,17 +257,142 @@ export default function CreatorLandingPage() {
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="py-20 bg-muted/30 border-t border-border text-center">
-        <div className="container mx-auto px-4 max-w-3xl">
-          <h2 className="text-3xl font-bold mb-4">Ready to submit your first article?</h2>
-          <p className="text-muted-foreground mb-8">Join the private creator beta. Applications are reviewed within 48 hours.</p>
-          <Link href="/creators/apply">
-            <Button size="lg" className="gap-2 px-8 py-6 rounded-xl">
-              Start Creator Application
-              <ArrowRight className="h-5 w-5" />
-            </Button>
-          </Link>
+      {/* CTA / Creator Sign-Up Form */}
+      <section id="creator-signup" className="py-20 bg-muted/30 border-t border-border">
+        <div className="container mx-auto px-4 max-w-xl">
+          {user.isLoggedIn ? (
+            <div className="text-center">
+              <h2 className="text-3xl font-bold mb-4">Ready to submit your next article?</h2>
+              <p className="text-muted-foreground mb-8">
+                You&apos;re signed in. Open your Creator Dashboard to publish articles and track royalties.
+              </p>
+              <Link href="/creators/dashboard">
+                <Button size="lg" className="gap-2 px-8 py-6 rounded-xl">
+                  Go to Creator Dashboard
+                  <ArrowRight className="h-5 w-5" />
+                </Button>
+              </Link>
+            </div>
+          ) : (
+            <div className="bg-card border border-border rounded-2xl p-8 shadow-sm">
+              <div className="text-center mb-6">
+                <h2 className="text-2xl sm:text-3xl font-bold mb-2">Sign Up as a Creator</h2>
+                <p className="text-sm text-muted-foreground">
+                  One universal VeraLM account gives you full access to AI Chat and the Creator Dashboard.
+                </p>
+              </div>
+
+              {error && (
+                <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-xs flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              {successMessage && (
+                <div className="mb-4 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-xs flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  <span>{successMessage}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSignUp} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-medium mb-1.5" htmlFor="creator-name">
+                    Full Name
+                  </label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="creator-name"
+                      type="text"
+                      required
+                      placeholder="Jane Doe"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="pl-9"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium mb-1.5" htmlFor="creator-email">
+                    Email Address
+                  </label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="creator-email"
+                      type="email"
+                      required
+                      placeholder="you@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="pl-9"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium mb-1.5" htmlFor="creator-password">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="creator-password"
+                      type="password"
+                      required
+                      minLength={6}
+                      placeholder="At least 6 characters"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="pl-9"
+                    />
+                  </div>
+                </div>
+
+                <Button type="submit" size="lg" className="w-full gap-2" disabled={isLoading}>
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Creating Account...
+                    </>
+                  ) : (
+                    <>
+                      Create Creator Account
+                      <ArrowRight className="h-4 w-4" />
+                    </>
+                  )}
+                </Button>
+              </form>
+
+              <div className="relative my-5">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-border" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-card px-2 text-muted-foreground">or</span>
+                </div>
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={handleGoogleSignUp}
+              >
+                Continue with Google
+              </Button>
+
+              <div className="mt-6 pt-5 border-t border-border text-center text-sm text-muted-foreground">
+                Already signed up?{' '}
+                <Link href="/login" className="text-primary font-semibold hover:underline">
+                  Sign In to Dashboard
+                </Link>
+              </div>
+            </div>
+          )}
         </div>
       </section>
 

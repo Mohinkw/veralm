@@ -413,7 +413,7 @@ export default function AIChatPage() {
           {accountMenuOpen && (
             <div className="absolute bottom-full left-2 right-2 mb-2 rounded-xl border border-border bg-popover text-popover-foreground shadow-lg p-1.5 z-30 space-y-0.5 max-h-[75vh] overflow-y-auto">
               <Link
-                href="/creators/dashboard"
+                href={user.isLoggedIn ? '/creators/dashboard' : '/creators'}
                 onClick={() => setAccountMenuOpen(false)}
                 className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium hover:bg-accent transition-colors"
               >
@@ -458,7 +458,6 @@ export default function AIChatPage() {
                       { href: '/terms', label: 'Terms of Service' },
                       { href: '/licensing', label: 'Licensing' },
                       { href: '/blog', label: 'Release Notes & Blog' },
-                      { href: '/leaderboard', label: 'Leaderboard' },
                       { href: '/careers', label: 'Careers' },
                     ].map(({ href, label }) => (
                       <Link
@@ -597,7 +596,7 @@ export default function AIChatPage() {
             )}
             {/* Earn as a Creator */}
             <Link
-              href="/creators/dashboard"
+              href={user.isLoggedIn ? '/creators/dashboard' : '/creators'}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20"
             >
               <TrendingUp className="h-3.5 w-3.5" />

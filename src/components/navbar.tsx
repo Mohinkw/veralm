@@ -43,9 +43,9 @@ export function Navbar({ activePage }: { activePage?: string }) {
             How It Works
           </Link>
 
-          {/* Earn as a Creator — single entry point for all creator features */}
+          {/* Earn as a Creator — dashboard if logged in, how-it-works + signup if not */}
           <Link
-            href="/creators/dashboard"
+            href={user.isLoggedIn ? '/creators/dashboard' : '/creators'}
             className={`inline-flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-md transition-colors ${
               activePage === 'creators'
                 ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'

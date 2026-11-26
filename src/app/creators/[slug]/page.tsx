@@ -134,12 +134,6 @@ export default async function PublicCreatorProfilePage({ params }: Props) {
             <span>VeraLM</span>
           </Link>
           <div className="flex items-center gap-3">
-            <Link href="/leaderboard">
-              <Button variant="ghost" size="sm" className="gap-1.5 text-xs">
-                <Trophy className="h-4 w-4" />
-                Leaderboard
-              </Button>
-            </Link>
             <Link href="/">
               <Button size="sm" variant="outline" className="gap-1.5 text-xs">
                 <ArrowLeft className="h-4 w-4" />
