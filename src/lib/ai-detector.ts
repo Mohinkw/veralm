@@ -177,9 +177,9 @@ Respond ONLY with this exact JSON format:
   // 4. Decision logic for VeraLM knowledge model
   let verdict: 'approved' | 'review_required' | 'revision_requested' = 'approved';
 
-  if (!heuristicReport.passed || finalQuality < 50 || finalAiProb > 75) {
+  if (!heuristicReport.passed || finalQuality < 50 || finalAiProb > 85) {
     verdict = 'revision_requested';
-  } else if (finalQuality < 70 || finalAiProb > 45) {
+  } else if (finalQuality < 70 || finalAiProb > 75) {
     verdict = 'review_required';
   } else {
     verdict = 'approved';
