@@ -161,7 +161,11 @@ export function CreatorPayoutMethods() {
     const meta = METHOD_OPTIONS.find((m) => m.type === nextType);
     if (meta) {
       setCurrency(meta.defaultCurrency);
-      if (!label) setLabel(meta.name.split(' (')[0]);
+      const isAutoLabel =
+        !label.trim() || METHOD_OPTIONS.some((m) => m.name.split(' (')[0] === label);
+      if (isAutoLabel) {
+        setLabel(meta.name.split(' (')[0]);
+      }
     }
   };
 
