@@ -15,10 +15,10 @@ const ADMIN_TABS: Array<{
   label: string;
   icon: typeof FileText;
 }> = [
-  { key: 'articles', href: '/admin', label: 'Articles Queue', icon: FileText },
-  { key: 'creators', href: '/admin/creators', label: 'Creators', icon: Users },
-  { key: 'revenue', href: '/admin/revenue', label: 'Revenue & Payouts', icon: DollarSign },
-];
+    { key: 'articles', href: '/admin', label: 'Articles Queue', icon: FileText },
+    { key: 'creators', href: '/admin/creators', label: 'Creators', icon: Users },
+    { key: 'revenue', href: '/admin/revenue', label: 'Revenue & Payouts', icon: DollarSign },
+  ];
 
 export function AdminHeader({ activeTab }: AdminHeaderProps) {
   return (
@@ -45,11 +45,10 @@ export function AdminHeader({ activeTab }: AdminHeaderProps) {
               <Link
                 key={key}
                 href={href}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors ${
-                  activeTab === key
-                    ? 'bg-primary/10 text-primary font-semibold'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-                }`}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors ${activeTab === key
+                  ? 'bg-primary/10 text-primary font-semibold'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                  }`}
               >
                 <Icon className="h-4 w-4" />
                 <span>{label}</span>
@@ -80,11 +79,10 @@ export function AdminHeader({ activeTab }: AdminHeaderProps) {
           <Link
             key={key}
             href={href}
-            className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-              activeTab === key
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-muted/60 text-muted-foreground hover:text-foreground'
-            }`}
+            className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${activeTab === key
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-muted/60 text-muted-foreground hover:text-foreground'
+              }`}
           >
             <Icon className="h-3.5 w-3.5" />
             <span>{label}</span>
