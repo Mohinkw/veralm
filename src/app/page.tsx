@@ -503,6 +503,16 @@ export default function AIChatPage() {
               <div className="my-1 border-t border-border" />
               {user.isLoggedIn ? (
                 <>
+                  {user.isAdmin && (
+                    <Link
+                      href="/admin"
+                      onClick={() => setAccountMenuOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition-colors"
+                    >
+                      <Crown className="h-3.5 w-3.5 text-amber-500" />
+                      <span>Admin Dashboard</span>
+                    </Link>
+                  )}
                   <Link
                     href="/creators/profile"
                     onClick={() => setAccountMenuOpen(false)}

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { AdminHeader } from '@/components/admin-header';
 
 type CreatorRow = {
   id: string;
@@ -99,13 +100,9 @@ export default function AdminCreatorsPage() {
   const totalPaid = creators.reduce((s, c) => s + Number(c.totalLifetimeEarnings || 0), 0);
 
   return (
-    <main className="min-h-screen bg-gray-950 text-gray-100">
-      <div className="max-w-7xl mx-auto px-6 py-10">
-        <div className="flex items-center gap-2 text-sm text-gray-400 mb-6">
-          <Link href="/admin" className="hover:text-white">Admin</Link>
-          <span>›</span>
-          <span className="text-white">Creator Management</span>
-        </div>
+    <div className="min-h-screen bg-gray-950 text-gray-100">
+      <AdminHeader activeTab="creators" />
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
 
         <div className="flex items-center justify-between mb-8">
           <div>
@@ -206,7 +203,7 @@ export default function AdminCreatorsPage() {
             </tbody>
           </table>
         </div>
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }

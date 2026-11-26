@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
+import { AdminHeader } from '@/components/admin-header';
 
 type Article = { id: string; version: number; title: string; content: string; author_name: string; category_name: string | null; submitted_at: string; word_count: number | null };
 type Stats = { total_articles: number; pending_review: number; approved: number; rejected: number };
@@ -49,8 +50,10 @@ export default function AdminDashboard() {
     finally { setBusy(false); }
   };
 
-  return <main className="container mx-auto max-w-5xl p-6 space-y-6">
-    <div className="flex justify-between items-center"><h1 className="text-3xl font-bold">Article review</h1><Button variant="outline" onClick={refresh}>Refresh</Button></div>
+  return <div className="min-h-screen bg-background">
+    <AdminHeader activeTab="articles" />
+    <main className="container mx-auto max-w-5xl p-4 sm:p-6 space-y-6">
+    <div className="flex justify-between items-center"><h1 className="text-2xl sm:text-3xl font-bold">Article Review Queue</h1><Button variant="outline" onClick={refresh}>Refresh</Button></div>
     {loading && <p>Loading…</p>}
     {error && <p role="alert" className="text-destructive">{error} <a className="underline" href="/login">Sign in</a></p>}
     {stats && <p>{stats.pending_review} awaiting review · {stats.approved} approved · {stats.rejected} rejected · {stats.total_articles} total</p>}
@@ -72,5 +75,6 @@ export default function AdminDashboard() {
         </div>
       </div>}
     </section>)}
-  </main>;
+    </main>
+  </div>;
 }

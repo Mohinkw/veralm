@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { AdminHeader } from '@/components/admin-header';
 
 type RevenueRow = {
   id: string;
@@ -122,13 +123,9 @@ export default function AdminRevenuePage() {
   const totalPlatformMargin = Math.max(0, totalGross - totalInfra - totalCreatorPool);
 
   return (
-    <main className="min-h-screen bg-gray-950 text-gray-100">
-      <div className="max-w-7xl mx-auto px-6 py-10">
-        <div className="flex items-center gap-2 text-sm text-gray-400 mb-6">
-          <Link href="/admin" className="hover:text-white">Admin</Link>
-          <span>›</span>
-          <span className="text-white">Revenue Management</span>
-        </div>
+    <div className="min-h-screen bg-gray-950 text-gray-100">
+      <AdminHeader activeTab="revenue" />
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
 
         <div className="flex items-center justify-between mb-8">
           <div>
@@ -254,7 +251,7 @@ export default function AdminRevenuePage() {
             </tbody>
           </table>
         </div>
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }

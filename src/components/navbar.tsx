@@ -60,6 +60,14 @@ export function Navbar({ activePage }: { activePage?: string }) {
 
           {user.isLoggedIn ? (
             <div className="flex items-center gap-2">
+              {user.isAdmin && (
+                <Link
+                  href="/admin"
+                  className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 hover:bg-amber-500/25 text-xs font-semibold transition-colors"
+                >
+                  Admin
+                </Link>
+              )}
               <Link
                 href="/creators/profile"
                 className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 text-primary hover:bg-primary/20 text-xs font-semibold transition-colors"

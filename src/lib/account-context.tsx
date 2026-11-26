@@ -11,6 +11,7 @@ interface UserProfile {
   name?: string;
   isLoggedIn: boolean;
   isPro: boolean;
+  isAdmin?: boolean;
 }
 
 interface AccountContextType {
@@ -43,7 +44,11 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
       });
       if (res.ok) {
         const data = await res.json();
-        setUser((prev) => ({ ...prev, isPro: Boolean(data.isPro) }));
+        setUser((prev) => ({
+          ...prev,
+          isPro: Boolean(data.isPro),
+          isAdmin: Boolean(data.isAdmin),
+        }));
       }
     } catch {
       // ignore

@@ -221,15 +221,17 @@ async function getViewerAccess(): Promise<{ isPro: boolean; isSignedInMember: bo
     if (!uid) return { isPro: false, isSignedInMember: false };
 
     const res = await executeRawSQL(
-      `SELECT id, subscription_tier, pro_expires_at, is_active FROM users WHERE id = $1 LIMIT 1`,
+      `SELECT id, subscription_tier, pro_expires_at, is_active, role FROM users WHERE id = $1 LIMIT 1`,
       [uid]
     );
     const row = res?.rows?.[0];
     if (!row || row.is_active === false) return { isPro: false, isSignedInMember: false };
 
+    const isAdmin = ['admin', 'superadmin'].includes(row.role);
     const isPro =
-      row.subscription_tier === 'pro' &&
-      (!row.pro_expires_at || new Date(row.pro_expires_at).getTime() > Date.now());
+      isAdmin ||
+      (row.subscription_tier === 'pro' &&
+        (!row.pro_expires_at || new Date(row.pro_expires_at).getTime() > Date.now()));
 
     return { isPro, isSignedInMember: true };
   } catch {

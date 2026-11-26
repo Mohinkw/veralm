@@ -13,17 +13,22 @@ export async function GET(request: NextRequest) {
       .select({
         subscriptionTier: users.subscriptionTier,
         proExpiresAt: users.proExpiresAt,
+        role: users.role,
+        isActive: users.isActive,
       })
       .from(users)
       .where(eq(users.id, auth.user.id))
       .limit(1);
 
+    const isAdmin = Boolean(row?.isActive && ['admin', 'superadmin'].includes(row.role));
     const isPro =
-      row?.subscriptionTier === 'pro' &&
-      (!row.proExpiresAt || new Date(row.proExpiresAt).getTime() > Date.now());
+      isAdmin ||
+      (row?.subscriptionTier === 'pro' &&
+        (!row.proExpiresAt || new Date(row.proExpiresAt).getTime() > Date.now()));
 
     const res = NextResponse.json({
       isPro,
+      isAdmin,
       subscriptionTier: isPro ? 'pro' : 'free',
       proExpiresAt: row?.proExpiresAt || null,
     });
