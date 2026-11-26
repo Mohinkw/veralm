@@ -90,7 +90,17 @@ export default function CreatorArticleDetailPage({ params }: { params: Promise<{
         <label className="block">Content<textarea className="block w-full border rounded p-2 bg-background" rows={15} value={content} onChange={e => setContent(e.target.value)} /></label>
         <Button disabled={busy} onClick={resubmit}>Resubmit for review</Button>
       </section>}
-      <section className="rounded-xl border p-6 space-y-3"><h2 className="text-xl font-bold">Verification scores</h2><p>Quality: {article.composite_quality_score ?? 'Pending'} · Originality: {article.originality_score ?? 'Pending'} · AI probability: {article.ai_probability_score ?? 'Pending'}</p></section>
+      <section className="rounded-xl border p-6 space-y-3">
+        <h2 className="text-xl font-bold">Verification scores</h2>
+        <p className="text-sm">
+          Quality: <strong>{article.composite_quality_score != null ? `${article.composite_quality_score}/100` : 'Pending'}</strong>
+          {' · '}
+          Originality: <strong>{article.originality_score != null ? `${article.originality_score}/100` : 'Pending'}</strong>
+          {' · '}
+          AI Risk: <strong>{article.ai_probability_score != null ? `${article.ai_probability_score}%` : 'Pending'}</strong>
+          <span className="text-muted-foreground text-xs ml-2">(each scored independently; lower AI Risk is better)</span>
+        </p>
+      </section>
       <section className="rounded-xl border p-6 space-y-3"><h2 className="text-xl font-bold">Current content</h2><div className="whitespace-pre-wrap">{article.content}</div></section>
       <section className="rounded-xl border p-6 space-y-3"><h2 className="text-xl font-bold">Version history</h2>
         {versions.length === 0 ? <p>No versions available.</p> : versions.map(v => <details key={v.version_number} className="border-t pt-3"><summary className="cursor-pointer">Version {v.version_number} · {date(v.created_at)} · {v.title}</summary>{v.change_summary && <p>{v.change_summary}</p>}<div className="whitespace-pre-wrap mt-3">{v.content}</div></details>)}
