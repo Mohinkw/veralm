@@ -87,8 +87,8 @@ export default function LicensingPage() {
         <div className="border-t border-gray-800 pt-8 mt-8">
           <p className="text-gray-500 text-sm">
             Questions about licensing? Contact{" "}
-            <a href="mailto:creators@veralm.com" className="text-blue-400 hover:underline">
-              creators@veralm.com
+            <a href="mailto:support@veralm.com" className="text-blue-400 hover:underline">
+              support@veralm.com
             </a>
           </p>
         </div>

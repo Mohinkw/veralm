@@ -62,7 +62,7 @@ export default function TermsPage() {
           },
           {
             title: "12. Contact",
-            body: "Legal inquiries: legal@veralm.com",
+            body: "Legal inquiries: admin@veralm.com",
           },
         ].map((s) => (
           <section key={s.title} className="mb-8">

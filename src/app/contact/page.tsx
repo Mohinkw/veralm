@@ -27,10 +27,10 @@ export default function ContactPage() {
         {/* Contact info */}
         <div className="grid sm:grid-cols-2 gap-4 mb-10">
           {[
-            { label: "General", email: "hello@veralm.com" },
-            { label: "Creator Support", email: "creators@veralm.com" },
-            { label: "Legal / Privacy", email: "legal@veralm.com" },
-            { label: "Press", email: "press@veralm.com" },
+            { label: "General & Support", email: "support@veralm.com" },
+            { label: "Creator Support", email: "support@veralm.com" },
+            { label: "Legal & Privacy", email: "admin@veralm.com" },
+            { label: "Press & Partnerships", email: "admin@veralm.com" },
           ].map((c) => (
             <div key={c.label} className="bg-gray-900 border border-gray-800 rounded-lg p-4">
               <div className="text-xs text-gray-500 mb-1">{c.label}</div>

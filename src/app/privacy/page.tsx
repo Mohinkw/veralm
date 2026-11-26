@@ -42,7 +42,7 @@ export default function PrivacyPage() {
           },
           {
             title: "7. Your Rights",
-            body: `You may access, correct, export, or delete your data at any time via your profile settings or by emailing privacy@veralm.com. EU/EEA residents have additional rights under GDPR Article 17–21.`,
+            body: `You may access, correct, export, or delete your data at any time via your profile settings or by emailing support@veralm.com. EU/EEA residents have additional rights under GDPR Article 17–21.`,
           },
           {
             title: "8. Security",
@@ -54,7 +54,7 @@ export default function PrivacyPage() {
           },
           {
             title: "10. Contact",
-            body: `For privacy inquiries: privacy@veralm.com`,
+            body: `For privacy inquiries: admin@veralm.com`,
           },
         ].map((s) => (
           <section key={s.title} className="mb-8">

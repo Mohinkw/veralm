@@ -109,7 +109,7 @@ export default function CareersPage() {
                   </div>
                 </div>
                 <a
-                  href={`mailto:careers@veralm.com?subject=Application: ${role.title}`}
+                  href={`mailto:admin@veralm.com?subject=Application: ${role.title}`}
                   className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg text-sm font-medium shrink-0"
                 >
                   Apply
@@ -128,10 +128,10 @@ export default function CareersPage() {
           We&apos;re always looking for exceptional people. Send us a note.
         </p>
         <a
-          href="mailto:careers@veralm.com"
+          href="mailto:admin@veralm.com"
           className="bg-purple-600 hover:bg-purple-500 text-white px-8 py-3 rounded-lg font-semibold"
         >
-          careers@veralm.com
+          admin@veralm.com
         </a>
       </section>
     </main>

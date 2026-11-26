@@ -20,8 +20,8 @@ export async function POST(request: NextRequest) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from: process.env.EMAIL_FROM || "noreply@veralm.com",
-          to: "hello@veralm.com",
+          from: process.env.EMAIL_FROM || "support@veralm.com",
+          to: process.env.CONTACT_TO_EMAIL || "support@veralm.com",
           reply_to: email,
           subject: `[VeraLM Contact] ${subject || "General Inquiry"} from ${name}`,
           text: `Name: ${name}\nEmail: ${email}\nSubject: ${subject}\n\n${message}`,
