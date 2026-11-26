@@ -615,7 +615,7 @@ export default function AIChatPage() {
             </button>
             <div className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-border bg-card/80 backdrop-blur text-xs font-medium">
               <VeraLMLogo className="h-3.5 w-3.5" size={14} />
-              <span>VeraLM 2.0</span>
+              <span>VeraLM</span>
             </div>
           </div>
 
