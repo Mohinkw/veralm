@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { PenLine, User, LogOut, Crown } from 'lucide-react';
+import { TrendingUp, LogOut, Crown } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { VeraLMLogo } from '@/components/veralm-logo';
 import { useAccount } from '@/lib/account-context';
@@ -43,15 +43,19 @@ export function Navbar({ activePage }: { activePage?: string }) {
             How It Works
           </Link>
 
-          {/* Creator link */}
+          {/* Earn as a Creator — single entry point for all creator features */}
           <Link
-            href="/creators/dashboard"
-            aria-label="Creator Studio"
-            className="inline-flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-            title="Creator Studio"
+            href="/creators"
+            className={`inline-flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-md transition-colors ${
+              activePage === 'creators'
+                ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'
+                : 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10'
+            }`}
+            title="Earn as a Creator — dashboard, articles, earnings & more"
           >
-            <PenLine className="h-4 w-4 text-green-500" />
-            <span className="hidden sm:inline">Creators</span>
+            <TrendingUp className="h-4 w-4" />
+            <span className="hidden sm:inline">Earn as a Creator</span>
+            <span className="sm:hidden">Earn</span>
           </Link>
 
           {user.isLoggedIn ? (

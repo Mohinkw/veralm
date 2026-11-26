@@ -1,29 +1,15 @@
+'use client';
+
 import Link from 'next/link';
 import { Sparkles, ShieldCheck, Database, Search, DollarSign, ArrowRight, CheckCircle2, Lock, Award, FileText, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { VeraLMLogo } from '@/components/veralm-logo';
+import { Navbar } from '@/components/navbar';
 
 export default function AboutPage() {
   return (
     <div className="min-h-screen bg-background">
-      {/* Navigation */}
-      <nav className="border-b border-border sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 font-bold text-xl">
-            <VeraLMLogo className="h-6 w-6" />
-            <span>VeraLM</span>
-          </Link>
-          <div className="flex items-center gap-6">
-            <Link href="/search" className="text-sm font-medium text-muted-foreground hover:text-foreground">Search</Link>
-            <Link href="/creators" className="text-sm font-medium text-muted-foreground hover:text-foreground">For Creators</Link>
-            <Link href="/categories" className="text-sm font-medium text-muted-foreground hover:text-foreground">Categories</Link>
-            <Link href="/login" className="text-sm font-medium text-muted-foreground hover:text-foreground">Sign In</Link>
-            <Link href="/register" className="bg-primary text-primary-foreground px-4 py-2 rounded-md text-sm font-medium hover:bg-primary/90">
-              Get Started
-            </Link>
-          </div>
-        </div>
-      </nav>
+      {/* Shared Navbar — shows logged-in user state across all pages */}
+      <Navbar activePage="about" />
 
       {/* Hero Header */}
       <section className="py-20 bg-muted/20 border-b border-border">

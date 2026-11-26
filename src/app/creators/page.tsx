@@ -1,30 +1,43 @@
+'use client';
+
 import Link from 'next/link';
 import { DollarSign, Shield, BookOpen, ArrowRight, CheckCircle2, TrendingUp, Users, Award, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { VeraLMLogo } from '@/components/veralm-logo';
+import { Navbar } from '@/components/navbar';
+import { useAccount } from '@/lib/account-context';
 
 export default function CreatorLandingPage() {
+  const { user } = useAccount();
+
   return (
     <div className="min-h-screen bg-background">
-      {/* Navigation */}
-      <nav className="border-b border-border sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 font-bold text-xl">
-            <VeraLMLogo className="h-6 w-6" />
-            <span>VeraLM</span>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium ml-1">For Creators</span>
-          </Link>
-          <div className="flex items-center gap-6">
-            <Link href="/search" className="text-sm font-medium text-muted-foreground hover:text-foreground">Search</Link>
-            <Link href="/about" className="text-sm font-medium text-muted-foreground hover:text-foreground">How It Works</Link>
-            <Link href="/creators/dashboard" className="text-sm font-medium text-muted-foreground hover:text-foreground">Dashboard</Link>
-            <Link href="/login" className="text-sm font-medium text-muted-foreground hover:text-foreground">Sign In</Link>
-            <Link href="/creators/apply" className="bg-primary text-primary-foreground px-4 py-2 rounded-md text-sm font-medium hover:bg-primary/90">
-              Apply Now
-            </Link>
+      {/* Shared Navbar — shows logged-in user state across all pages */}
+      <Navbar activePage="creators" />
+
+      {/* Creator Hub strip — all creator features in one place, visible when logged in */}
+      {user.isLoggedIn && (
+        <div className="bg-emerald-500/5 border-b border-emerald-500/20">
+          <div className="container mx-auto px-4 h-11 flex items-center gap-1 overflow-x-auto">
+            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mr-3 shrink-0">Creator Hub:</span>
+            {[
+              { href: '/creators/dashboard', label: 'Dashboard' },
+              { href: '/creators/articles', label: 'My Articles' },
+              { href: '/creators/articles/new', label: '+ Submit Article' },
+              { href: '/creators/earnings', label: 'Earnings' },
+              { href: '/creators/analytics', label: 'Analytics' },
+              { href: '/creators/profile', label: 'Profile' },
+            ].map(({ href, label }) => (
+              <Link
+                key={href}
+                href={href}
+                className="shrink-0 text-xs font-medium px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 transition-colors"
+              >
+                {label}
+              </Link>
+            ))}
           </div>
         </div>
-      </nav>
+      )}
 
       {/* Hero */}
       <section className="py-20 lg:py-28 bg-gradient-to-b from-primary/5 via-background to-background border-b border-border">
@@ -44,17 +57,35 @@ export default function CreatorLandingPage() {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link href="/creators/apply">
-              <Button size="lg" className="gap-2 text-base px-8 py-6 rounded-xl">
-                Become a Data Provider
-                <ArrowRight className="h-5 w-5" />
-              </Button>
-            </Link>
-            <Link href="/creators/dashboard">
-              <Button size="lg" variant="outline" className="text-base px-8 py-6 rounded-xl">
-                Creator Dashboard Preview
-              </Button>
-            </Link>
+            {user.isLoggedIn ? (
+              <>
+                <Link href="/creators/dashboard">
+                  <Button size="lg" className="gap-2 text-base px-8 py-6 rounded-xl">
+                    Go to Creator Dashboard
+                    <ArrowRight className="h-5 w-5" />
+                  </Button>
+                </Link>
+                <Link href="/creators/articles/new">
+                  <Button size="lg" variant="outline" className="text-base px-8 py-6 rounded-xl">
+                    Submit an Article
+                  </Button>
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link href="/creators/apply">
+                  <Button size="lg" className="gap-2 text-base px-8 py-6 rounded-xl">
+                    Become a Data Provider
+                    <ArrowRight className="h-5 w-5" />
+                  </Button>
+                </Link>
+                <Link href="/login">
+                  <Button size="lg" variant="outline" className="text-base px-8 py-6 rounded-xl">
+                    Sign In to Dashboard
+                  </Button>
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Social Proof */}
