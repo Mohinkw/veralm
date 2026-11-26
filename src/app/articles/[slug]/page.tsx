@@ -27,6 +27,7 @@ import { isExternalSearchEngineReferer, verifyCitationToken } from '@/lib/citati
 import { executeRawSQL } from '@/db/client';
 import { createServerClient } from '@/lib/supabase';
 import { MarkdownRenderer } from '@/components/markdown-renderer';
+import { ArticleRating } from '@/components/article-rating';
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -379,7 +380,7 @@ export default async function ArticlePreviewPage({ params, searchParams }: Props
 
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 text-xs font-semibold border border-purple-500/20">
               <Star className="h-3.5 w-3.5 fill-current" />
-              Quality Score: {qualityScore}/100
+              Platform Rating: {(qualityScore / 10).toFixed(1)}/10
             </span>
           </div>
 
@@ -515,6 +516,14 @@ export default async function ArticlePreviewPage({ params, searchParams }: Props
                   </div>
                 )}
               </div>
+
+              {/* Rate This Article (1 - 10) */}
+              {article?.id && (
+                <ArticleRating
+                  articleId={article.id}
+                  platformRatingOutOf10={Number((qualityScore / 10).toFixed(1))}
+                />
+              )}
 
               {/* Creator Royalty & Pro Option Card */}
               <div className="p-6 rounded-2xl bg-muted/40 border border-border flex flex-col sm:flex-row items-center justify-between gap-6">

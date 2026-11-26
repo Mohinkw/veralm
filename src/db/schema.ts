@@ -450,3 +450,17 @@ export type NewQueryCache = typeof queryCache.$inferInsert;
 
 // Import serial for audit_log
 import { serial } from 'drizzle-orm/pg-core';
+
+// User Article Ratings (1 - 10 scale)
+export const articleRatings = pgTable('article_ratings', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  articleId: uuid('article_id').notNull().references(() => articles.id, { onDelete: 'cascade' }),
+  raterKey: text('rater_key').notNull(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+  rating: integer('rating').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  articleIdx: index('idx_article_ratings_article').on(table.articleId),
+  raterUnique: uniqueIndex('article_ratings_unique').on(table.articleId, table.raterKey),
+}));
