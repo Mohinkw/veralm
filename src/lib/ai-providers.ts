@@ -147,7 +147,7 @@ export async function generateChatAnswer(
   options?: GenerateChatOptions
 ): Promise<{ answer: string; modelUsed: string; source: string }> {
   const geminiKeys = getGeminiKeys();
-  const maxOutputTokens = options?.maxOutputTokens ?? 900;
+  const maxOutputTokens = options?.maxOutputTokens ?? 2000;
   const geminiHistory = toGeminiHistory(options?.history);
 
   // ─── TIER 1: Google Gemini Multi-Key Rotation Pool ───

@@ -254,7 +254,9 @@ export async function synthesizeSearchAnswer(
     const systemPrompt = `You are VeraLM, answering questions using verified human-written articles from the VeraLM Knowledge Vault.
 
 Rules:
-1. Answer ONLY what the user asked, matching the length and scope of their question. Short questions get short, direct answers (2-5 sentences or the exact relevant lines). Do NOT pad with extra background or unnecessary headings.
+1. Match depth to the user's INTENT (not word count):
+   - For narrow factual questions, definitions, or when the user asks for a concise/short answer: reply briefly and directly (1-4 sentences).
+   - For broad or open-ended prompts ("describe", "explain", "how does", "compare", "overview", "guide"): give a thorough, well-structured explanation covering all relevant details from the sources.
 2. Preserve the original article's wording, terminology, facts, and phrasing as closely as possible. Quote or extract directly with minimal stitching—avoid rewriting into generic AI-sounding prose.
 3. Rely strictly on the verified excerpts provided below when they answer the question, and cite sources inline as [1], [2]. Only use outside knowledge if the excerpts do not cover a part of a follow-up question.
 4. No filler, disclaimers, or repetitive intros.${regionLine}`;
@@ -262,7 +264,7 @@ Rules:
     const userPrompt = `Question: ${query}\n\nVerified Knowledge Vault Excerpts:\n${context}`;
     const result = await generateChatAnswer(systemPrompt, userPrompt, 0.1, {
       history: options?.history,
-      maxOutputTokens: 900,
+      maxOutputTokens: 2000,
     });
     return { answer: result.answer, aiSource: result.source, modelUsed: result.modelUsed };
   }
@@ -270,13 +272,15 @@ Rules:
   const systemPrompt = `You are VeraLM, a helpful AI assistant. No matching article was found in the VeraLM Knowledge Vault for this question, so answer using your own knowledge.
 
 Rules:
-1. Be concise, direct, and factual—match the length of your reply to the question.
+1. Match depth to the user's INTENT (not word count):
+   - Narrow factoid/definition questions or explicit requests for a short/concise answer → keep it brief and direct (1-4 sentences).
+   - Broad/analytical prompts ("describe", "explain", "compare", "how does", "guide", "overview") → provide a thorough, well-structured breakdown with clear sections or bullet points covering key aspects.
 2. Continue the conversation naturally using prior turns when relevant.
-3. No boilerplate disclaimers or unnecessary padding.${regionLine}`;
+3. No boilerplate disclaimers or unnecessary filler.${regionLine}`;
 
   const result = await generateChatAnswer(systemPrompt, query, 0.2, {
     history: options?.history,
-    maxOutputTokens: 900,
+    maxOutputTokens: 2000,
   });
   return { answer: result.answer, aiSource: result.source, modelUsed: result.modelUsed };
 }
