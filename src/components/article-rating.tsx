@@ -92,7 +92,7 @@ export function ArticleRating({ articleId, platformRatingOutOf10 }: ArticleRatin
               User Rating:{' '}
               {averageRating !== null
                 ? `${averageRating.toFixed(1)}/10 (${totalRatings})`
-                : 'No ratings yet'}
+                : `No ratings yet (0)`}
             </span>
           </div>
         </div>
