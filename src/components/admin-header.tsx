@@ -25,15 +25,20 @@ export function AdminHeader({ activeTab }: AdminHeaderProps) {
     <header className="border-b border-border sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto px-3 sm:px-4 h-16 flex items-center justify-between gap-2">
         <div className="flex items-center gap-4 lg:gap-6 min-w-0">
-          <Link href="/admin" className="flex items-center gap-2 font-bold text-lg sm:text-xl shrink-0">
-            <VeraLMLogo className="h-6 w-6" />
-            <span>VeraLM</span>
-            <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 font-semibold">
+          <div className="flex items-center gap-2 shrink-0">
+            <Link href="/" className="flex items-center gap-2 font-bold text-lg sm:text-xl hover:opacity-80 transition-opacity">
+              <VeraLMLogo className="h-6 w-6" />
+              <span>VeraLM</span>
+            </Link>
+            <Link
+              href="/admin"
+              className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 font-semibold hover:bg-amber-500/25 transition-colors"
+            >
               <ShieldCheck className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Admin Dashboard</span>
               <span className="sm:hidden">Admin</span>
-            </span>
-          </Link>
+            </Link>
+          </div>
 
           <nav className="hidden md:flex items-center gap-1 text-sm font-medium">
             {ADMIN_TABS.map(({ key, href, label, icon: Icon }) => (
