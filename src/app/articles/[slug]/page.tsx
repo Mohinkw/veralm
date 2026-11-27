@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { cookies, headers } from 'next/headers';
-import { VeraLMLogo } from '@/components/veralm-logo';
+import { Navbar } from '@/components/navbar';
 import {
   Sparkles,
   ShieldCheck,
@@ -305,35 +305,8 @@ export default async function ArticlePreviewPage({ params, searchParams }: Props
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
-      {/* Navigation */}
-      <nav className="border-b border-border sticky top-0 z-50 bg-background/95 backdrop-blur">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 font-bold text-xl">
-            <VeraLMLogo className="h-6 w-6" />
-            <span>VeraLM</span>
-            <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/10 text-primary font-mono ml-1">
-              Knowledge Vault
-            </span>
-          </Link>
-          <div className="flex items-center gap-4">
-            <Link
-              href="/"
-              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              AI Model
-            </Link>
-            <Link
-              href="/creators"
-              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              For Creators
-            </Link>
-            <Link href="/login" className="text-sm font-medium text-primary hover:underline">
-              Sign In
-            </Link>
-          </div>
-        </div>
-      </nav>
+      {/* Shared Navbar — preserves logged-in user session */}
+      <Navbar />
 
       {/* Main Container */}
       <main className="flex-1 py-10 px-4">

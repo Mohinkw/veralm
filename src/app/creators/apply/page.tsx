@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { ArrowRight, Shield, Users, BarChart3, Lock, Globe, CheckCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { VeraLMLogo } from '@/components/veralm-logo';
+import { Navbar } from '@/components/navbar';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
@@ -134,21 +134,8 @@ export default function CreatorApplyPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Navigation */}
-      <nav className="border-b border-border sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <a href="/" className="flex items-center gap-2 font-bold text-xl">
-            <VeraLMLogo className="h-6 w-6" />
-            <span>VeraLM</span>
-          </a>
-          <div className="flex items-center gap-6">
-            <a href="/search" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Search</a>
-            <a href="/creators" className="text-sm font-medium text-primary">For Creators</a>
-            <a href="/about" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">How It Works</a>
-            <a href="/login" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Sign In</a>
-          </div>
-        </div>
-      </nav>
+      {/* Shared Navbar — preserves logged-in user session */}
+      <Navbar activePage="creators" />
 
       {/* Progress Indicator */}
       <div className="border-b border-border bg-muted/30">

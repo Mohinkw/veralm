@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Code, Cpu, LineChart, Stethoscope, Scale, Palette, Briefcase, GraduationCap, Search, ArrowRight, BookOpen, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { VeraLMLogo } from '@/components/veralm-logo';
+import { Navbar } from '@/components/navbar';
 
 export const metadata = {
   title: 'Browse Vault Knowledge Categories - VeraLM',
@@ -102,24 +102,8 @@ const CATEGORIES = [
 export default function CategoriesPage() {
   return (
     <div className="min-h-screen bg-background">
-      {/* Navigation */}
-      <nav className="border-b border-border sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 font-bold text-xl">
-            <VeraLMLogo className="h-6 w-6" />
-            <span>VeraLM</span>
-          </Link>
-          <div className="flex items-center gap-6">
-            <Link href="/search" className="text-sm font-medium text-muted-foreground hover:text-foreground">Search</Link>
-            <Link href="/creators" className="text-sm font-medium text-muted-foreground hover:text-foreground">For Creators</Link>
-            <Link href="/about" className="text-sm font-medium text-muted-foreground hover:text-foreground">How It Works</Link>
-            <Link href="/login" className="text-sm font-medium text-muted-foreground hover:text-foreground">Sign In</Link>
-            <Link href="/register" className="bg-primary text-primary-foreground px-4 py-2 rounded-md text-sm font-medium hover:bg-primary/90">
-              Get Started
-            </Link>
-          </div>
-        </div>
-      </nav>
+      {/* Shared Navbar — preserves logged-in user session */}
+      <Navbar />
 
       {/* Hero */}
       <section className="py-16 bg-muted/20 border-b border-border">
