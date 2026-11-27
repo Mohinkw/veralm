@@ -108,22 +108,36 @@ By pairing dense semantic embeddings (cosine similarity) with sparse inverted in
   },
 };
 
-// Strict no-index metadata: outside search engines and AI scrapers are never allowed to index articles
-export async function generateMetadata(): Promise<Metadata> {
+// Allow search engines and AI citation bots to index the article title, excerpt, and 50% public preview
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const article = await fetchArticle(slug);
+  if (!article) {
+    return {
+      title: 'Verified Knowledge Source | VeraLM',
+      description: 'Grounding knowledge vault for the VeraLM AI model.',
+    };
+  }
+
+  const description =
+    article.excerpt ||
+    (article.content ? article.content.replace(/[#*_`>\[\]]/g, '').slice(0, 155).trim() + '...' : 'Verified human-authored article on VeraLM.');
+
   return {
-    title: 'Verified Knowledge Source | VeraLM AI Model',
-    description: 'Grounding knowledge vault for the VeraLM frontier AI model.',
+    title: `${article.title} | VeraLM`,
+    description,
     robots: {
-      index: false,
-      follow: false,
-      nocache: true,
+      index: true,
+      follow: true,
       googleBot: {
-        index: false,
-        follow: false,
-        noimageindex: true,
-        'max-video-preview': -1,
-        'max-image-preview': 'none',
+        index: true,
+        follow: true,
         'max-snippet': -1,
+        'max-image-preview': 'large',
       },
     },
   };

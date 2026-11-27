@@ -6,18 +6,17 @@ export default function robots(): MetadataRoute.Robots {
 
   return {
     rules: [
-      // 1. General search engines (Google, Bing, Yahoo, DuckDuckGo)
-      // Allowed to index public marketing, about, creator, and legal pages.
-      // Strictly BLOCKED from accessing private knowledge vault articles.
+      // 1. General search engines & AI Search/Citation bots
+      // Allowed to index public pages and the 50% public article previews on /articles/
+      // so VeraLM articles can appear in Google, ChatGPT Search, and Perplexity citations.
       {
-        userAgent: '*',
+        userAgent: ['*', 'OAI-SearchBot', 'ChatGPT-User', 'PerplexityBot'],
         allow: [
           '/',
           '/about',
+          '/articles/',
           '/categories',
           '/creators',
-          '/creators/apply',
-          '/leaderboard',
           '/pro',
           '/licensing',
           '/blog',
@@ -26,7 +25,6 @@ export default function robots(): MetadataRoute.Robots {
           '/terms',
         ],
         disallow: [
-          '/articles/',
           '/admin/',
           '/api/',
           '/auth/',
@@ -34,16 +32,14 @@ export default function robots(): MetadataRoute.Robots {
           '/creators/earnings',
           '/creators/analytics',
           '/creators/articles/',
+          '/creators/profile',
         ],
       },
-      // 2. Outside AI Scrapers & LLM Training Crawlers
-      // Completely BLOCKED from scraping proprietary knowledge articles.
+      // 2. LLM Model-Training Crawlers
+      // Strictly BLOCKED from scraping Knowledge Vault articles for base model training.
       {
         userAgent: [
           'GPTBot',
-          'OAI-SearchBot',
-          'ChatGPT-User',
-          'PerplexityBot',
           'ClaudeBot',
           'anthropic-ai',
           'Google-Extended',
