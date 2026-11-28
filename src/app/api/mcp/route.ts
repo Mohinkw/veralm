@@ -1,8 +1,8 @@
-import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
-import { and, eq, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db } from '@/db/client';
-import { apiKeys, categories } from '@/db/schema';
+import { categories } from '@/db/schema';
+import { authenticateAndMeterApiKey, extractApiKeyFromRequest } from '@/lib/api-key-auth';
 import { extractClientIp, isRateLimited } from '@/lib/rate-limit';
 import { searchKnowledgeBase } from '@/lib/services/search';
 
@@ -28,8 +28,8 @@ const MCP_TOOLS = [
   },
 ];
 
-function jsonRpcResult(id: string | number | null, result: unknown) {
-  return NextResponse.json({ jsonrpc: '2.0', id, result });
+function jsonRpcResult(id: string | number | null, result: unknown, headers?: Record<string, string>) {
+  return NextResponse.json({ jsonrpc: '2.0', id, result }, headers ? { headers } : undefined);
 }
 
 function jsonRpcError(id: string | number | null, code: number, message: string, status = 200) {
@@ -62,30 +62,24 @@ export async function POST(request: NextRequest) {
   if (method === 'tools/call') {
     const toolName = body?.params?.name;
     const args = body?.params?.arguments || {};
+    let quotaHeaders: Record<string, string> | undefined;
 
-    const authHeader = request.headers.get('authorization')?.trim() || '';
-    const rawKey = authHeader.toLowerCase().startsWith('bearer ') ? authHeader.slice(7).trim() : '';
-
-    if (rawKey.startsWith('vlm_live_')) {
-      const keyHash = crypto.createHash('sha256').update(rawKey).digest('hex');
-      const [keyRec] = await db
-        .select()
-        .from(apiKeys)
-        .where(and(eq(apiKeys.keyHash, keyHash), eq(apiKeys.isActive, true)))
-        .limit(1);
-
-      if (!keyRec) return jsonRpcError(id, -32001, 'Invalid or revoked API key.');
-      if (keyRec.requestsUsed >= keyRec.monthlyQuota) {
-        return jsonRpcError(id, -32002, 'Monthly API key quota exceeded.');
+    if (extractApiKeyFromRequest(request)) {
+      const keyResult = await authenticateAndMeterApiKey(request, 'mcp:read');
+      if ('error' in keyResult) {
+        const errBody = await keyResult.error.json().catch(() => ({ error: 'Unauthorized' }));
+        return jsonRpcError(id, -32001, errBody.error || 'API key rejected', keyResult.error.status);
       }
-      await db
-        .update(apiKeys)
-        .set({ requestsUsed: sql`${apiKeys.requestsUsed} + 1`, lastUsedAt: new Date() })
-        .where(eq(apiKeys.id, keyRec.id));
+      quotaHeaders = keyResult.auth.headers;
     } else {
       const ip = extractClientIp(request);
-      if (await isRateLimited(`mcp:${ip}`)) {
-        return jsonRpcError(id, -32002, 'Demo MCP rate limit exceeded. Pass Bearer vlm_live_... API key.');
+      if (await isRateLimited(`mcp:${ip}`, 3)) {
+        return jsonRpcError(
+          id,
+          -32002,
+          'Anonymous MCP hourly demo limit (3/hr) reached. Pass Authorization: Bearer vlm_live_... API key.',
+          429
+        );
       }
     }
 
@@ -95,9 +89,11 @@ export async function POST(request: NextRequest) {
         .from(categories)
         .where(eq(categories.isActive, true))
         .limit(30);
-      return jsonRpcResult(id, {
-        content: [{ type: 'text', text: JSON.stringify({ categories: rows }, null, 2) }],
-      });
+      return jsonRpcResult(
+        id,
+        { content: [{ type: 'text', text: JSON.stringify({ categories: rows }, null, 2) }] },
+        quotaHeaders
+      );
     }
 
     if (toolName === 'query_verified_knowledge') {
@@ -124,14 +120,18 @@ export async function POST(request: NextRequest) {
         excerpt: r.chunk_text,
       }));
 
-      return jsonRpcResult(id, {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({ query, vault_source: vaultSource, results: formatted }, null, 2),
-          },
-        ],
-      });
+      return jsonRpcResult(
+        id,
+        {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ query, vault_source: vaultSource, results: formatted }, null, 2),
+            },
+          ],
+        },
+        quotaHeaders
+      );
     }
 
     return jsonRpcError(id, -32601, `Unknown tool: ${String(toolName)}`);

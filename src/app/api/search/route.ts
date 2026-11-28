@@ -4,6 +4,7 @@ import { createServerClient } from '@/lib/supabase';
 import { executeRawSQL } from '@/db/client';
 import { generateSessionId } from '@/lib/utils';
 import { extractClientIp, isRateLimited } from '@/lib/rate-limit';
+import { authenticateAndMeterApiKey, extractApiKeyFromRequest, type AuthenticatedApiKey } from '@/lib/api-key-auth';
 import { rewriteFollowUpQuery, type ChatTurn } from '@/lib/ai-providers';
 import { filterAndRenumberCitedSources, isConversationalOrMetaQuery } from '@/lib/rag-utils';
 import {
@@ -189,23 +190,34 @@ export async function POST(request: NextRequest) {
     const deepMode = deep_mode === true;
     const wantStream = stream === true || request.nextUrl.searchParams.get('stream') === '1';
 
-    const ip = extractClientIp(request);
-    if (await isRateLimited(`search:ip:${ip}`)) {
-      return NextResponse.json(
-        { error: 'Too many messages. Please slow down.' },
-        { status: 429 }
-      );
-    }
-
     let userId: string | null = null;
-    const token = bearerToken(request);
-    if (token) {
-      try {
-        const db = createServerClient();
-        const { data } = await db.auth.getUser(token);
-        if (data.user?.id) userId = data.user.id;
-      } catch {
-        // Proceed anonymously
+    let apiKeyAuth: AuthenticatedApiKey | null = null;
+    let effectiveSessionId = sessionId;
+
+    if (extractApiKeyFromRequest(request)) {
+      const keyResult = await authenticateAndMeterApiKey(request, 'chat:write');
+      if ('error' in keyResult) return keyResult.error;
+      apiKeyAuth = keyResult.auth;
+      userId = apiKeyAuth.userId;
+      effectiveSessionId = `api:${apiKeyAuth.keyPrefix}`;
+    } else {
+      const ip = extractClientIp(request);
+      if (await isRateLimited(`search:ip:${ip}`)) {
+        return NextResponse.json(
+          { error: 'Too many messages. Please slow down.' },
+          { status: 429 }
+        );
+      }
+
+      const token = bearerToken(request);
+      if (token) {
+        try {
+          const db = createServerClient();
+          const { data } = await db.auth.getUser(token);
+          if (data.user?.id) userId = data.user.id;
+        } catch {
+          // Proceed anonymously
+        }
       }
     }
 
@@ -457,14 +469,14 @@ export async function POST(request: NextRequest) {
     const payload: SearchApiResponse = {
       ...(queryId ? { query_id: queryId } : {}),
       answer,
-      citations: citedRows.map((r, i) => mapCitation(r, i, sessionId)),
-      articles_used: citedRows.map((r) => mapArticle(r, sessionId)),
+      citations: citedRows.map((r, i) => mapCitation(r, i, effectiveSessionId)),
+      articles_used: citedRows.map((r) => mapArticle(r, effectiveSessionId)),
       latency_ms: latencyMs,
       was_cached: false,
       vault_source: citedRows.length > 0 ? vaultSource : 'none',
     };
 
-    return NextResponse.json(payload);
+    return NextResponse.json(payload, apiKeyAuth ? { headers: apiKeyAuth.headers } : undefined);
   } catch (error) {
     console.error('[Search API] Unhandled error:', error);
     return NextResponse.json({ error: 'Failed to generate answer' }, { status: 500 });

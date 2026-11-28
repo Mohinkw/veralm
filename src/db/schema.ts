@@ -60,6 +60,7 @@ export const users = pgTable('users', {
   subscriptionTier: text('subscription_tier').default('free').notNull(), // 'free' | 'pro'
   proExpiresAt: timestamp('pro_expires_at', { withTimezone: true }),
   stripeCustomerId: text('stripe_customer_id'),
+  apiCreditBalanceCents: integer('api_credit_balance_cents').default(0).notNull(),
   isActive: boolean('is_active').default(true).notNull(),
   lastSignIn: timestamp('last_sign_in', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -452,12 +453,34 @@ export const apiKeys = pgTable('api_keys', {
   keyPrefix: text('key_prefix').notNull(),
   keyHash: text('key_hash').unique().notNull(),
   tier: text('tier').default('free').notNull(),
-  monthlyQuota: integer('monthly_quota').default(1000).notNull(),
+  monthlyQuota: integer('monthly_quota').default(500).notNull(),
   requestsUsed: integer('requests_used').default(0).notNull(),
+  scopes: text('scopes').array().default(['ground:read', 'chat:write', 'mcp:read']).notNull(),
+  allowedIps: text('allowed_ips').array().default([]).notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+  lastUsedIp: inet('last_used_ip'),
+  disabledReason: text('disabled_reason'),
+  quotaResetAt: timestamp('quota_reset_at', { withTimezone: true }).defaultNow().notNull(),
+  hourlyWindowStart: timestamp('hourly_window_start', { withTimezone: true }).defaultNow().notNull(),
+  hourlyRequestsUsed: integer('hourly_requests_used').default(0).notNull(),
   isActive: boolean('is_active').default(true).notNull(),
   lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+// Pay-As-You-Go API Wallet Credit Transactions
+export const apiCreditTransactions = pgTable('api_credit_transactions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  amountCents: integer('amount_cents').notNull(),
+  balanceAfterCents: integer('balance_after_cents').notNull(),
+  txType: text('tx_type').notNull(),
+  description: text('description'),
+  stripeSessionId: text('stripe_session_id').unique(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  userCreatedIdx: index('idx_api_credit_tx_user_created').on(table.userId, table.createdAt),
+}));
 
 // ============================================================
 // TYPE EXPORTS

@@ -1,51 +1,19 @@
-import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
-import { and, eq, sql } from 'drizzle-orm';
 import { db, executeRawSQL } from '@/db/client';
-import { apiKeys, searchQueries } from '@/db/schema';
+import { searchQueries } from '@/db/schema';
+import { authenticateAndMeterApiKey } from '@/lib/api-key-auth';
 import { parseJsonObject } from '@/lib/auth/request';
 import { mapCitation, mapArticle, searchKnowledgeBase } from '@/lib/services/search';
 import type { SearchArticleUsed } from '@/types';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function extractApiKey(request: NextRequest): string {
-  const authHeader = request.headers.get('authorization')?.trim() || '';
-  if (authHeader.toLowerCase().startsWith('bearer ')) {
-    return authHeader.slice(7).trim();
-  }
-  return request.headers.get('x-api-key')?.trim() || '';
-}
-
 export async function POST(request: NextRequest) {
-  const rawKey = extractApiKey(request);
-  if (!rawKey || !rawKey.startsWith('vlm_live_')) {
-    return NextResponse.json(
-      { error: 'Missing or invalid API key. Pass Authorization: Bearer vlm_live_...' },
-      { status: 401 }
-    );
-  }
-
-  const keyHash = crypto.createHash('sha256').update(rawKey).digest('hex');
+  const keyResult = await authenticateAndMeterApiKey(request, 'ground:read');
+  if ('error' in keyResult) return keyResult.error;
+  const keyAuth = keyResult.auth;
 
   try {
-    const [keyRecord] = await db
-      .select()
-      .from(apiKeys)
-      .where(and(eq(apiKeys.keyHash, keyHash), eq(apiKeys.isActive, true)))
-      .limit(1);
-
-    if (!keyRecord) {
-      return NextResponse.json({ error: 'API key not found or revoked.' }, { status: 401 });
-    }
-
-    if (keyRecord.requestsUsed >= keyRecord.monthlyQuota) {
-      return NextResponse.json(
-        { error: 'Monthly grounding quota exceeded.', quota: keyRecord.monthlyQuota },
-        { status: 429 }
-      );
-    }
-
     const parsed = await parseJsonObject(request);
     if ('error' in parsed) return parsed.error;
 
@@ -55,7 +23,10 @@ export async function POST(request: NextRequest) {
     const limit = Number.isFinite(rawLimit) ? Math.min(10, Math.max(1, Math.floor(rawLimit))) : 5;
 
     if (query.length < 2 || query.length > 500) {
-      return NextResponse.json({ error: 'query must be between 2 and 500 characters.' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'query must be between 2 and 500 characters.' },
+        { status: 400, headers: keyAuth.headers }
+      );
     }
 
     const startMs = Date.now();
@@ -63,7 +34,7 @@ export async function POST(request: NextRequest) {
       categorySlug: category,
       limit,
     });
-    const sessionId = `api:${keyRecord.keyPrefix}`;
+    const sessionId = `api:${keyAuth.keyPrefix}`;
     const citations = vaultResults.map((row, idx) => mapCitation(row, idx, sessionId));
 
     const articlesMap = new Map<string, SearchArticleUsed>();
@@ -74,25 +45,13 @@ export async function POST(request: NextRequest) {
     }
     const articlesUsed = Array.from(articlesMap.values());
 
-    const [updatedKey] = await db
-      .update(apiKeys)
-      .set({
-        requestsUsed: sql`${apiKeys.requestsUsed} + 1`,
-        lastUsedAt: new Date(),
-      })
-      .where(eq(apiKeys.id, keyRecord.id))
-      .returning({
-        requestsUsed: apiKeys.requestsUsed,
-        monthlyQuota: apiKeys.monthlyQuota,
-      });
-
     // Log attribution so creators earn royalties from Grounding API calls
     try {
       const realRows = vaultResults.filter((r) => UUID_RE.test(r.article_id));
       const [savedQuery] = await db
         .insert(searchQueries)
         .values({
-          userId: keyRecord.userId,
+          userId: keyAuth.userId,
           sessionId,
           queryText: query,
           modelUsed: 'grounding-api-v1',
@@ -129,11 +88,16 @@ export async function POST(request: NextRequest) {
         sources: articlesUsed,
         citations,
         quota: {
-          used: updatedKey?.requestsUsed ?? keyRecord.requestsUsed + 1,
-          limit: updatedKey?.monthlyQuota ?? keyRecord.monthlyQuota,
+          plan: keyAuth.plan,
+          billed_to_wallet: keyAuth.billedToWallet,
+          hourly_used: keyAuth.hourlyUsed,
+          hourly_limit: keyAuth.hourlyLimit,
+          monthly_used: keyAuth.requestsUsed,
+          monthly_limit: keyAuth.monthlyLimit,
+          credit_balance_cents: keyAuth.creditBalanceCents,
         },
       },
-      { headers: { 'Cache-Control': 'private, no-store' } }
+      { headers: keyAuth.headers }
     );
   } catch (err) {
     console.error('[Grounding API v1] Error:', err);

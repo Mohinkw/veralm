@@ -841,6 +841,7 @@ Reference documentation: [Distributed Storage Standard](https://example.org/kest
         dev_ov_1440 = page.evaluate("Math.max(0, document.documentElement.scrollWidth - window.innerWidth)")
         record(results, "/developers has 0px horizontal overflow on 320px & 1440px", dev_ov_320 == 0 and dev_ov_1440 == 0, f"320={dev_ov_320}, 1440={dev_ov_1440}")
 
+        k_unauth, _ = http_json("POST", f"{BASE_URL}/api/developers/keys", {"name": "Unauth Key"})
         g401, _ = http_json("POST", f"{BASE_URL}/api/v1/ground", {"query": "pgvector HNSW"})
         k_code, k_resp = http_json(
             "POST",
@@ -850,6 +851,7 @@ Reference documentation: [Distributed Storage Standard](https://example.org/kest
         )
         raw_api_key = k_resp.get("rawKey") if isinstance(k_resp, dict) else None
         g200, g_resp = (0, {})
+        g_rate_429 = 0
         if raw_api_key:
             g200, g_resp = http_json(
                 "POST",
@@ -857,8 +859,50 @@ Reference documentation: [Distributed Storage Standard](https://example.org/kest
                 {"query": "pgvector HNSW", "limit": 3},
                 headers={"Authorization": f"Bearer {raw_api_key}"},
             )
-        ground_ok = g401 == 401 and k_code == 201 and g200 == 200 and isinstance(g_resp.get("citations"), list)
-        record(results, "Developer API key minting & /api/v1/ground auth/grounding work", ground_ok, f"401={g401}, k={k_code}, 200={g200}")
+            # Exhaust Free tier 3/hr limit (2nd & 3rd succeed, 4th -> 429)
+            http_json("POST", f"{BASE_URL}/api/v1/ground", {"query": "pgvector HNSW", "limit": 2}, headers={"Authorization": f"Bearer {raw_api_key}"})
+            http_json("POST", f"{BASE_URL}/api/v1/ground", {"query": "pgvector HNSW", "limit": 2}, headers={"Authorization": f"Bearer {raw_api_key}"})
+            g_rate_429, _ = http_json("POST", f"{BASE_URL}/api/v1/ground", {"query": "pgvector HNSW", "limit": 2}, headers={"Authorization": f"Bearer {raw_api_key}"})
+
+        # 30-day login inactivity auto-disable check
+        inact_401 = 0
+        if raw_api_key and creator_user_id:
+            run_pg_sql("UPDATE public.users SET last_sign_in = NOW() - INTERVAL '31 days' WHERE id = $1", [creator_user_id])
+            inact_401, _ = http_json("POST", f"{BASE_URL}/api/v1/ground", {"query": "pgvector HNSW"}, headers={"Authorization": f"Bearer {raw_api_key}"})
+            run_pg_sql("UPDATE public.users SET last_sign_in = NOW() WHERE id = $1", [creator_user_id])
+
+        # Scope restriction check (ground:read only -> 403 on /api/chat)
+        k_scoped_code, k_scoped = http_json(
+            "POST",
+            f"{BASE_URL}/api/developers/keys",
+            {"name": f"Scoped {run_id}", "scopes": ["ground:read"]},
+            headers={"Authorization": f"Bearer {c_token}"},
+        )
+        scoped_403 = 0
+        if k_scoped_code == 201 and isinstance(k_scoped, dict) and k_scoped.get("rawKey"):
+            scoped_403, _ = http_json(
+                "POST",
+                f"{BASE_URL}/api/chat",
+                {"query": "What is VeraLM?"},
+                headers={"Authorization": f"Bearer {k_scoped['rawKey']}"},
+            )
+
+        ground_ok = (
+            k_unauth == 401
+            and g401 == 401
+            and k_code == 201
+            and g200 == 200
+            and g_rate_429 == 429
+            and inact_401 == 401
+            and scoped_403 == 403
+            and isinstance(g_resp.get("citations"), list)
+        )
+        record(
+            results,
+            "Developer API key auth, 3/hr Free limit, 30d inactivity auto-disable & scope guards work",
+            ground_ok,
+            f"unauth={k_unauth}, 401={g401}, k={k_code}, 200={g200}, 429={g_rate_429}, inact={inact_401}, scope403={scoped_403}",
+        )
 
         # 3. Shareable Answer (/api/share -> /share/<slug>) public SSR load + 320px overflow
         share_code, share_resp = http_json(
@@ -887,6 +931,7 @@ Reference documentation: [Distributed Storage Standard](https://example.org/kest
         try:
             user_ids = [u for u in (creator_user_id, admin_user_id) if u]
             if user_ids:
+                run_pg_sql("DELETE FROM api_credit_transactions WHERE user_id = ANY($1::uuid[])", [user_ids])
                 run_pg_sql("DELETE FROM api_keys WHERE user_id = ANY($1::uuid[])", [user_ids])
                 run_pg_sql("DELETE FROM conversation_messages WHERE conversation_id IN (SELECT id FROM conversations WHERE user_id = ANY($1::uuid[]))", [user_ids])
                 run_pg_sql("DELETE FROM conversations WHERE user_id = ANY($1::uuid[])", [user_ids])

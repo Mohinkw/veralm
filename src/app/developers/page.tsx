@@ -13,6 +13,11 @@ import {
   FileText,
   LogIn,
   AlertCircle,
+  Wallet,
+  Shield,
+  RefreshCw,
+  PauseCircle,
+  PlayCircle,
 } from 'lucide-react';
 import { Navbar } from '@/components/navbar';
 import { Button } from '@/components/ui/button';
@@ -27,15 +32,56 @@ type ApiKeyRow = {
   tier: string;
   monthlyQuota: number;
   requestsUsed: number;
+  hourlyRequestsUsed?: number;
+  scopes?: string[];
+  allowedIps?: string[];
+  expiresAt?: string | null;
+  lastUsedIp?: string | null;
+  disabledReason?: string | null;
   isActive: boolean;
   lastUsedAt: string | null;
   createdAt: string;
 };
 
+type AccountSummary = {
+  plan: 'free' | 'pro';
+  creditBalanceCents: number;
+  hourlyLimit: number;
+  monthlyLimit: number;
+  paygHourlyLimit: number;
+  lastSignIn: string;
+};
+
+type CreditTx = {
+  id: string;
+  amountCents: number;
+  balanceAfterCents: number;
+  txType: string;
+  description: string | null;
+  createdAt: string;
+};
+
+const ALL_SCOPES = [
+  { id: 'ground:read', label: 'Grounding API' },
+  { id: 'chat:write', label: 'Chat / Search API' },
+  { id: 'mcp:read', label: 'MCP Server' },
+];
+
 export default function DevelopersPage() {
   const { user, isLoading: authLoading } = useAccount();
   const [keys, setKeys] = useState<ApiKeyRow[]>([]);
+  const [account, setAccount] = useState<AccountSummary | null>(null);
+  const [transactions, setTransactions] = useState<CreditTx[]>([]);
   const [keyName, setKeyName] = useState('');
+  const [keyTier, setKeyTier] = useState<'standard' | 'payg'>('standard');
+  const [selectedScopes, setSelectedScopes] = useState<string[]>([
+    'ground:read',
+    'chat:write',
+    'mcp:read',
+  ]);
+  const [allowedIpsInput, setAllowedIpsInput] = useState('');
+  const [expiresInDays, setExpiresInDays] = useState<string>('90');
+  const [topupAmount, setTopupAmount] = useState('25');
   const [rawKey, setRawKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -46,6 +92,8 @@ export default function DevelopersPage() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
         setKeys([]);
+        setAccount(null);
+        setTransactions([]);
         return;
       }
       const res = await fetch('/api/developers/keys', {
@@ -55,6 +103,8 @@ export default function DevelopersPage() {
       if (res.ok) {
         const body = await res.json();
         setKeys(body.keys || []);
+        setAccount(body.account || null);
+        setTransactions(body.transactions || []);
       }
     } catch {
       // Ignore
@@ -64,6 +114,16 @@ export default function DevelopersPage() {
   useEffect(() => {
     if (!authLoading) void loadKeys();
   }, [authLoading, user.id, loadKeys]);
+
+  const toggleScope = (scopeId: string) => {
+    setSelectedScopes((prev) =>
+      prev.includes(scopeId)
+        ? prev.length > 1
+          ? prev.filter((s) => s !== scopeId)
+          : prev
+        : [...prev, scopeId]
+    );
+  };
 
   const handleCreateKey = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,15 +143,100 @@ export default function DevelopersPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ name: keyName.trim() }),
+        body: JSON.stringify({
+          name: keyName.trim(),
+          tier: keyTier === 'payg' ? 'payg' : undefined,
+          scopes: selectedScopes,
+          allowedIps: allowedIpsInput.trim() || undefined,
+          expiresInDays: expiresInDays ? Number(expiresInDays) : null,
+        }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || 'Could not create key.');
       setRawKey(body.rawKey || null);
       setKeyName('');
+      setAllowedIpsInput('');
       await loadKeys();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create API key.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleTopup = async (amountUsd?: number) => {
+    const amount = amountUsd ?? Number(topupAmount);
+    if (!Number.isFinite(amount) || amount < 5) {
+      setError('Minimum wallet top-up is $5.00 USD.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Sign in required.');
+      const res = await fetch('/api/developers/topup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ amountUsd: amount }),
+      });
+      const body = await res.json();
+      if (!res.ok || !body.url) throw new Error(body.error || 'Could not start checkout.');
+      window.location.href = body.url;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Top-up failed.');
+      setBusy(false);
+    }
+  };
+
+  const handleToggleKey = async (k: ApiKeyRow) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Sign in required.');
+      const res = await fetch('/api/developers/keys', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ id: k.id, isActive: !k.isActive }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Update failed.');
+      await loadKeys();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Update failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRotateKey = async (k: ApiKeyRow) => {
+    setBusy(true);
+    setError(null);
+    setRawKey(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Sign in required.');
+      const res = await fetch('/api/developers/keys', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ id: k.id, rotate: true }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Key rotation failed.');
+      setRawKey(body.rawKey || null);
+      await loadKeys();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Rotation failed.');
     } finally {
       setBusy(false);
     }
@@ -137,9 +282,92 @@ export default function DevelopersPage() {
           </div>
           <h1 className="text-3xl font-bold tracking-tight">VeraLM Developer Portal</h1>
           <p className="text-sm text-muted-foreground max-w-2xl">
-            Ground your AI agents, RAG pipelines, and IDE assistants on verified human-authored knowledge. Every API query attributes original authors.
+            Ground your AI agents, RAG pipelines, and IDE assistants on verified human-authored knowledge.
           </p>
         </div>
+
+        {/* Plan Tiers & Rate Limits */}
+        <section className="grid sm:grid-cols-3 gap-4">
+          <div className="bg-card border border-border rounded-2xl p-4 space-y-1">
+            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Free Plan</div>
+            <div className="text-lg font-bold">500 req / month</div>
+            <div className="text-xs text-muted-foreground">Max 3 requests / hour</div>
+          </div>
+          <div className="bg-card border border-primary/30 rounded-2xl p-4 space-y-1">
+            <div className="text-xs font-semibold uppercase tracking-wider text-primary">Pro Plan</div>
+            <div className="text-lg font-bold">1,000 req / month</div>
+            <div className="text-xs text-muted-foreground">Max 10 requests / hour</div>
+          </div>
+          <div className="bg-card border border-emerald-500/30 rounded-2xl p-4 space-y-1">
+            <div className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+              Paid API Wallet
+            </div>
+            <div className="text-lg font-bold">Unlimited Top-Up</div>
+            <div className="text-xs text-muted-foreground">$0.01 / req &middot; 120 req / hour</div>
+          </div>
+        </section>
+
+        {/* Pay-As-You-Go Wallet (Authenticated) */}
+        {user.isLoggedIn && account && (
+          <section className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold flex items-center gap-2">
+                  <Wallet className="h-5 w-5 text-emerald-500" />
+                  Paid API Wallet Balance
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Load unlimited non-expiring credits ($0.01/request). Automatically covers overages or dedicated Paid API keys.
+                </p>
+              </div>
+              <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                ${(account.creditBalanceCents / 100).toFixed(2)}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {[10, 25, 100].map((amt) => (
+                <Button
+                  key={amt}
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => handleTopup(amt)}
+                >
+                  +${amt}
+                </Button>
+              ))}
+              <div className="flex items-center gap-2 flex-1 min-w-[180px]">
+                <Input
+                  type="number"
+                  min={5}
+                  step="1"
+                  value={topupAmount}
+                  onChange={(e) => setTopupAmount(e.target.value)}
+                  placeholder="Custom USD"
+                  className="h-9"
+                />
+                <Button type="button" size="sm" disabled={busy} onClick={() => handleTopup()}>
+                  Load Funds
+                </Button>
+              </div>
+            </div>
+
+            {transactions.length > 0 && (
+              <div className="text-xs text-muted-foreground border-t border-border pt-3 space-y-1">
+                {transactions.slice(0, 4).map((tx) => (
+                  <div key={tx.id} className="flex items-center justify-between">
+                    <span>{tx.description || tx.txType}</span>
+                    <span className={tx.amountCents >= 0 ? 'text-emerald-600 font-semibold' : ''}>
+                      {tx.amountCents >= 0 ? '+' : '-'}${Math.abs(tx.amountCents / 100).toFixed(2)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
 
         {/* API Key Management */}
         <section className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-5">
@@ -154,10 +382,17 @@ export default function DevelopersPage() {
             </Link>
           </div>
 
+          <div className="p-3 rounded-xl bg-muted/40 border border-border text-xs text-muted-foreground flex items-start gap-2">
+            <Shield className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+            <span>
+              Security guardrails: Verified account login required to mint keys; SHA-256 hashed at rest; scoped permissions; optional IP allowlists &amp; expiration; keys auto-disable if the owner has not signed in for 30 days.
+            </span>
+          </div>
+
           {!authLoading && !user.isLoggedIn ? (
             <div className="p-4 rounded-xl bg-muted/50 border border-border flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm text-muted-foreground">
-                Sign in to mint and manage <code className="text-xs">vlm_live_...</code> API keys (1,000 free monthly grounding requests).
+                Sign in with a verified account to generate and manage <code className="text-xs">vlm_live_...</code> API keys. Unauthenticated users cannot create API keys.
               </p>
               <Link href="/login">
                 <Button size="sm" className="gap-1.5">
@@ -168,18 +403,63 @@ export default function DevelopersPage() {
             </div>
           ) : (
             <>
-              <form onSubmit={handleCreateKey} className="flex flex-col sm:flex-row gap-2">
-                <Input
-                  value={keyName}
-                  onChange={(e) => setKeyName(e.target.value)}
-                  placeholder="Key label (e.g. Claude Desktop MCP or Production Agent)"
-                  className="w-full sm:flex-1 min-w-0"
-                  maxLength={60}
-                />
-                <Button type="submit" disabled={busy} className="gap-1.5 shrink-0">
-                  <Plus className="h-4 w-4" />
-                  Create Key
-                </Button>
+              <form onSubmit={handleCreateKey} className="space-y-3 p-4 rounded-xl border border-border bg-background/50">
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Input
+                    value={keyName}
+                    onChange={(e) => setKeyName(e.target.value)}
+                    placeholder="Key label (e.g. Claude Desktop MCP or Production Agent)"
+                    className="w-full sm:flex-1 min-w-0"
+                    maxLength={60}
+                  />
+                  <select
+                    value={keyTier}
+                    onChange={(e) => setKeyTier(e.target.value as 'standard' | 'payg')}
+                    className="h-10 rounded-md border border-input bg-background px-3 text-xs font-medium"
+                  >
+                    <option value="standard">
+                      {account?.plan === 'pro' ? 'Pro Plan (1,000/mo · 10/hr)' : 'Free Tier (500/mo · 3/hr)'}
+                    </option>
+                    <option value="payg">Paid API Wallet ($0.01/req · 120/hr)</option>
+                  </select>
+                  <select
+                    value={expiresInDays}
+                    onChange={(e) => setExpiresInDays(e.target.value)}
+                    className="h-10 rounded-md border border-input bg-background px-3 text-xs font-medium"
+                  >
+                    <option value="30">Expires in 30d</option>
+                    <option value="90">Expires in 90d</option>
+                    <option value="365">Expires in 1y</option>
+                    <option value="">No expiration</option>
+                  </select>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3 text-xs">
+                  <span className="font-semibold text-muted-foreground">Scopes:</span>
+                  {ALL_SCOPES.map((s) => (
+                    <label key={s.id} className="inline-flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedScopes.includes(s.id)}
+                        onChange={() => toggleScope(s.id)}
+                      />
+                      <span>{s.label}</span>
+                    </label>
+                  ))}
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Input
+                    value={allowedIpsInput}
+                    onChange={(e) => setAllowedIpsInput(e.target.value)}
+                    placeholder="Optional IP allowlist (comma-separated, e.g. 203.0.113.10)"
+                    className="w-full sm:flex-1 min-w-0 text-xs"
+                  />
+                  <Button type="submit" disabled={busy} className="gap-1.5 shrink-0">
+                    <Plus className="h-4 w-4" />
+                    Create Key
+                  </Button>
+                </div>
               </form>
 
               {error && (
@@ -209,24 +489,67 @@ export default function DevelopersPage() {
               {keys.length > 0 && (
                 <div className="divide-y divide-border border border-border rounded-xl overflow-hidden">
                   {keys.map((k) => (
-                    <div key={k.id} className="p-3.5 flex items-center justify-between gap-3 bg-background/60">
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold truncate">{k.name}</div>
+                    <div key={k.id} className="p-3.5 flex flex-wrap items-center justify-between gap-3 bg-background/60">
+                      <div className="min-w-0 space-y-0.5">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-semibold truncate">{k.name}</span>
+                          <span
+                            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                              k.isActive
+                                ? 'bg-emerald-500/10 text-emerald-600'
+                                : 'bg-amber-500/10 text-amber-600'
+                            }`}
+                          >
+                            {k.isActive
+                              ? 'Active'
+                              : k.disabledReason === 'inactive_account_30d'
+                                ? 'Disabled (30d login inactivity)'
+                                : 'Paused'}
+                          </span>
+                        </div>
                         <div className="text-xs text-muted-foreground font-mono">
-                          {k.keyPrefix}… &middot; {k.requestsUsed}/{k.monthlyQuota} reqs ({k.tier})
+                          {k.keyPrefix}… &middot;{' '}
+                          {k.tier === 'payg'
+                            ? `${k.requestsUsed} reqs (Pay-As-You-Go)`
+                            : `${k.requestsUsed}/${k.monthlyQuota} monthly`}
+                          {k.lastUsedIp ? ` · Last IP ${k.lastUsedIp}` : ''}
                         </div>
                       </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        disabled={busy}
-                        onClick={() => handleRevoke(k.id)}
-                        className="text-destructive hover:text-destructive shrink-0"
-                        aria-label={`Revoke ${k.name}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={busy}
+                          onClick={() => handleToggleKey(k)}
+                          title={k.isActive ? 'Pause key' : 'Re-enable key'}
+                          aria-label={k.isActive ? `Pause ${k.name}` : `Enable ${k.name}`}
+                        >
+                          {k.isActive ? <PauseCircle className="h-4 w-4" /> : <PlayCircle className="h-4 w-4 text-emerald-500" />}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={busy}
+                          onClick={() => handleRotateKey(k)}
+                          title="Rotate key"
+                          aria-label={`Rotate ${k.name}`}
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={busy}
+                          onClick={() => handleRevoke(k.id)}
+                          className="text-destructive hover:text-destructive"
+                          aria-label={`Revoke ${k.name}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>

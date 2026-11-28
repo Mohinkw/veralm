@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { db } from '@/db/client';
-import { users } from '@/db/schema';
+import { apiCreditTransactions, users } from '@/db/schema';
 import { isValidUuid } from '@/lib/auth/request';
 import { verifyStripeSignature } from '@/lib/stripe-webhook';
 
@@ -154,6 +154,44 @@ export async function POST(request: NextRequest) {
           break;
         }
         const userId = metadata.userId || asString(obj.client_reference_id);
+        const sessionId = asString(obj.id);
+
+        if (metadata.type === 'api_credit_topup') {
+          const amountCents = Number(metadata.amountCents || 0);
+          if (userId && isValidUuid(userId) && Number.isFinite(amountCents) && amountCents > 0) {
+            const existingTx = sessionId
+              ? await db
+                  .select({ id: apiCreditTransactions.id })
+                  .from(apiCreditTransactions)
+                  .where(eq(apiCreditTransactions.stripeSessionId, sessionId))
+                  .limit(1)
+              : [];
+
+            if (existingTx.length === 0) {
+              const [updatedUser] = await db
+                .update(users)
+                .set({
+                  apiCreditBalanceCents: sql`${users.apiCreditBalanceCents} + ${Math.floor(amountCents)}`,
+                  updatedAt: new Date(),
+                })
+                .where(eq(users.id, userId))
+                .returning({ balance: users.apiCreditBalanceCents });
+
+              if (updatedUser) {
+                await db.insert(apiCreditTransactions).values({
+                  userId,
+                  amountCents: Math.floor(amountCents),
+                  balanceAfterCents: updatedUser.balance,
+                  txType: 'topup',
+                  description: `Stripe wallet top-up ($${(amountCents / 100).toFixed(2)})`,
+                  stripeSessionId: sessionId || null,
+                });
+              }
+            }
+          }
+          break;
+        }
+
         const customerId = asString(obj.customer);
         const customerDetails =
           obj.customer_details && typeof obj.customer_details === 'object'
