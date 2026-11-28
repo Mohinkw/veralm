@@ -46,18 +46,22 @@ type EarningRecord = {
 };
 
 export default function CreatorEarningsPage() {
-  const { user } = useAccount();
+  const { user, isLoading: authLoading } = useAccount();
   const [articles, setArticles] = useState<Article[]>([]);
   const [earningsHistory, setEarningsHistory] = useState<EarningRecord[]>([]);
   const [summary, setSummary] = useState({ lifetimePaid: 0, minimumPayout: 50, paymentEmail: '' });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
+    if (authLoading) return;
+    let cancelled = false;
     async function loadEarningsData() {
+      setLoading(true);
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
-          setLoading(false);
+          if (!cancelled) setLoading(false);
           return;
         }
 
@@ -67,11 +71,11 @@ export default function CreatorEarningsPage() {
           fetch('/api/creators/earnings', { headers, cache: 'no-store' }),
         ]);
 
-        if (articlesRes.ok) {
+        if (!cancelled && articlesRes.ok) {
           const data = await articlesRes.json();
           setArticles(data.articles || []);
         }
-        if (earningsRes.ok) {
+        if (!cancelled && earningsRes.ok) {
           const data = await earningsRes.json();
           setEarningsHistory(data.earnings || []);
           if (data.summary) {
@@ -81,21 +85,27 @@ export default function CreatorEarningsPage() {
               paymentEmail: data.summary.paymentEmail || '',
             });
           }
+          setError('');
+        } else if (!cancelled && !earningsRes.ok) {
+          const body = await earningsRes.json().catch(() => null);
+          setError(body?.error || 'Could not load earnings history.');
         }
       } catch {
-        // ignore
+        if (!cancelled) setError('Network error loading earnings.');
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
 
-    loadEarningsData();
-  }, []);
+    void loadEarningsData();
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, user.id]);
 
   const totalEarnings = articles.reduce((sum, a) => sum + (Number(a.total_earnings_attributed) || 0), 0);
   const totalCitations = articles.reduce((sum, a) => sum + (a.total_query_contributions || 0), 0);
   const displayName = user.name || user.email?.split('@')[0] || 'Creator';
-  const initial = displayName.charAt(0).toUpperCase();
 
   const earningsSummary = {
     currentUnpaid: totalEarnings,
@@ -116,11 +126,25 @@ export default function CreatorEarningsPage() {
       <main className="py-8 px-4">
         <div className="container mx-auto max-w-6xl space-y-8">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Earnings & Royalty Payouts</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Earnings &amp; Royalty Payouts</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
               Review current accrued royalties, payout status, and historical distributions for {displayName}.
             </p>
           </div>
+
+          {!authLoading && !user.isLoggedIn && (
+            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 text-sm flex flex-wrap items-center justify-between gap-3">
+              <span>Sign in to view royalty breakdowns and configure payout methods.</span>
+              <Link href="/login">
+                <Button size="sm" variant="outline">Sign In</Button>
+              </Link>
+            </div>
+          )}
+          {error && (
+            <div role="alert" className="p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+              {error}
+            </div>
+          )}
 
           {/* Key Metrics */}
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">

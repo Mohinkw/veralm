@@ -1,8 +1,8 @@
 import { inngest } from "./client";
 import { db } from "@/db/client";
-import { articles } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import { processArticleEmbeddings } from "@/lib/ai";
+import { articles, creatorProfiles } from "@/db/schema";
+import { eq, sql } from "drizzle-orm";
+import { deleteArticleEmbeddings, processArticleEmbeddings } from "@/lib/ai";
 import { auditArticleSubmission } from "@/lib/ai-detector";
 
 export const verifyArticle = inngest.createFunction(
@@ -12,6 +12,7 @@ export const verifyArticle = inngest.createFunction(
       const [result] = await db
         .select({
           id: articles.id,
+          creatorId: articles.creatorId,
           title: articles.title,
           content: articles.content,
           status: articles.status,
@@ -24,14 +25,19 @@ export const verifyArticle = inngest.createFunction(
 
     if (!article) return { status: 'not_found' };
 
-    // If quality score is missing or needs asynchronous verification
     if (!article.qualityScore && article.content) {
       const audit = await step.run("run-ai-quality-audit", async () => {
         return await auditArticleSubmission(article.title, article.content);
       });
 
+      const nextStatus =
+        audit.verdict === 'approved'
+          ? 'approved'
+          : audit.verdict === 'revision_requested'
+            ? 'requires_revision'
+            : 'pending_review';
+
       await step.run("persist-audit-scores", async () => {
-        const nextStatus = audit.verdict === 'approved' ? 'approved' : 'pending_review';
         await db
           .update(articles)
           .set({
@@ -39,10 +45,29 @@ export const verifyArticle = inngest.createFunction(
             originalityScore: audit.originalityScore.toFixed(2),
             aiProbabilityScore: audit.aiProbabilityScore.toFixed(2),
             status: nextStatus,
+            licensingStatus: nextStatus === 'approved' ? 'active' : 'pending',
             approvedAt: nextStatus === 'approved' ? new Date() : null,
+            revisionInstructions: nextStatus === 'requires_revision' ? audit.flaggedSignals.join(' ') : null,
           })
           .where(eq(articles.id, article.id));
+
+        if (nextStatus === 'approved') {
+          await db
+            .update(creatorProfiles)
+            .set({ totalArticlesApproved: sql`${creatorProfiles.totalArticlesApproved} + 1` })
+            .where(eq(creatorProfiles.id, article.creatorId));
+        }
       });
+
+      if (nextStatus === 'approved') {
+        await step.run("index-approved-article", async () => {
+          return await processArticleEmbeddings(article.id, article.content);
+        });
+      } else {
+        await step.run("purge-non-approved-embeddings", async () => {
+          await deleteArticleEmbeddings(article.id);
+        });
+      }
 
       return { status: audit.verdict, audit };
     }

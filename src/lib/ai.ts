@@ -1,90 +1,86 @@
-import OpenAI from "openai";
+import { and, gte, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { articleEmbeddings } from "@/db/schema";
+import { generateEmbedding as generateGeminiEmbedding } from "@/lib/ai-providers";
+import { chunkText, chunkTextWithMeta, type ChunkWithMeta } from "@/lib/rag-utils";
 
-function getOpenAIClient(): OpenAI {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error("Missing OPENAI_API_KEY environment variable");
-  }
-  return new OpenAI({ apiKey });
+export { chunkText, chunkTextWithMeta, type ChunkWithMeta };
+
+/**
+ * Generate embedding for a text chunk via Gemini Free Tier (`gemini-embedding-001`, 1536d).
+ */
+export async function generateEmbedding(text: string): Promise<number[] | null> {
+  return generateGeminiEmbedding(text);
 }
 
 /**
- * Split text into chunks for embedding
- * Goal: chunks of ~500 words with some overlap
+ * Removes all indexed chunks for an article (e.g., on reject, revision, resubmit, or withdrawal).
  */
-export function chunkText(text: string, chunkSize: number = 2000, overlap: number = 200): string[] {
-  const chunks: string[] = [];
-  let start = 0;
-  
-  while (start < text.length) {
-    const end = Math.min(start + chunkSize, text.length);
-    chunks.push(text.slice(start, end));
-    if (end === text.length) break;
-    start = end - overlap;
-  }
-  
-  return chunks;
+export async function deleteArticleEmbeddings(articleId: string): Promise<void> {
+  await db.delete(articleEmbeddings).where(eq(articleEmbeddings.articleId, articleId));
 }
 
 /**
- * Generate embedding for a text chunk using OpenAI's text-embedding-3-small
+ * Chunk an approved article, generate 1536d Gemini Free Tier embeddings,
+ * upsert chunks, and prune any stale trailing chunks from earlier versions.
  */
-export async function generateEmbedding(text: string): Promise<number[]> {
-  const openai = getOpenAIClient();
-  const response = await openai.embeddings.create({
-    model: "text-embedding-3-small",
-    input: text,
-    encoding_format: "float",
-  });
-  
-  return response.data[0].embedding;
-}
-
-/**
- * Process an approved article: chunk it and store embeddings
- * REMARK: OpenAI calls are currently exempted/disabled per user instruction to ensure $0.00 spend.
- */
-export async function processArticleEmbeddings(articleId: string, content: string) {
-  // REMARK: OpenAI calls completely exempted to prevent billing.
-  return 0;
-}
-
-export async function processArticleEmbeddingsDisabled(articleId: string, content: string) {
-  const chunks = chunkText(content);
-  
-  const embeddingPromises = chunks.map(async (chunk, index) => {
-    const embedding = await generateEmbedding(chunk);
-    
-    return {
-      articleId,
-      chunkIndex: index,
-      chunkText: chunk,
-      embedding: embedding,
-      tokenCount: Math.ceil(chunk.length / 4), // Rough estimate
-    };
-  });
-  
-  const chunkData = await Promise.all(embeddingPromises);
-  
-  // Store chunks in database
-  for (const data of chunkData) {
-    await db.insert(articleEmbeddings).values({
-      articleId: data.articleId,
-      chunkIndex: data.chunkIndex,
-      chunkText: data.chunkText,
-      embedding: data.embedding,
-      tokenCount: data.tokenCount,
-    }).onConflictDoUpdate({
-      target: [articleEmbeddings.articleId, articleEmbeddings.chunkIndex],
-      set: {
-        chunkText: data.chunkText,
-        embedding: data.embedding,
-        tokenCount: data.tokenCount,
-      }
-    });
+export async function processArticleEmbeddings(
+  articleId: string,
+  content: string
+): Promise<number> {
+  const chunks = chunkTextWithMeta(content);
+  if (chunks.length === 0) {
+    await deleteArticleEmbeddings(articleId);
+    return 0;
   }
-  
-  return chunks.length;
+
+  let stored = 0;
+
+  for (const chunk of chunks) {
+    const embedding = await generateEmbedding(
+      chunk.heading ? `${chunk.heading}\n\n${chunk.text}` : chunk.text
+    );
+    if (!embedding) continue;
+
+    await db
+      .insert(articleEmbeddings)
+      .values({
+        articleId,
+        chunkIndex: chunk.index,
+        chunkText: chunk.text,
+        chunkHeading: chunk.heading,
+        isIntroChunk: chunk.isIntroChunk,
+        embedding,
+        embeddingModel: "gemini-embedding-001",
+        embeddingVersion: 2,
+        tokenCount: Math.max(1, chunk.text.split(/\s+/).length),
+      })
+      .onConflictDoUpdate({
+        target: [articleEmbeddings.articleId, articleEmbeddings.chunkIndex],
+        set: {
+          chunkText: chunk.text,
+          chunkHeading: chunk.heading,
+          isIntroChunk: chunk.isIntroChunk,
+          embedding,
+          embeddingModel: "gemini-embedding-001",
+          embeddingVersion: 2,
+          tokenCount: Math.max(1, chunk.text.split(/\s+/).length),
+        },
+      });
+    stored++;
+  }
+
+  // Prune leftover chunks if an updated article became shorter
+  if (stored > 0) {
+    await db
+      .delete(articleEmbeddings)
+      .where(
+        and(
+          eq(articleEmbeddings.articleId, articleId),
+          gte(articleEmbeddings.chunkIndex, chunks.length)
+        )
+      );
+  }
+
+  return stored;
 }

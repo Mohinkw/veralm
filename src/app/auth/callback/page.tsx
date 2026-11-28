@@ -6,6 +6,15 @@ import { supabase } from '@/lib/supabase';
 import { Loader2 } from 'lucide-react';
 import { VeraLMLogo } from '@/components/veralm-logo';
 
+function sanitizeNextPath(raw: string | null): string {
+  if (!raw || typeof raw !== 'string') return '/';
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith('/') || trimmed.startsWith('//') || trimmed.includes('\\')) {
+    return '/';
+  }
+  return trimmed;
+}
+
 function CallbackHandler() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -15,40 +24,42 @@ function CallbackHandler() {
     const handleAuth = async () => {
       try {
         const code = searchParams.get('code');
-        const next = searchParams.get('next') || '/';
+        const type = searchParams.get('type');
+        const next = sanitizeNextPath(searchParams.get('next'));
+        const destination = type === 'recovery' ? '/login?recovery=1' : next;
 
         if (code) {
           const { error } = await supabase.auth.exchangeCodeForSession(code);
           if (error) {
-            console.error('Code exchange failed:', error);
             setErrorMsg(error.message);
             setTimeout(() => router.push('/login?error=auth_failed'), 2000);
             return;
           }
         }
 
-        // Check if session exists (e.g. from implicit hash or PKCE exchange)
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
-          router.replace(next);
+          router.replace(destination);
         } else {
-          // Listen once for auth state change
-          const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-            if (session) {
+          const { data: authListener } = supabase.auth.onAuthStateChange((event, sess) => {
+            if (event === 'PASSWORD_RECOVERY') {
               authListener.subscription.unsubscribe();
-              router.replace(next);
+              router.replace('/login?recovery=1');
+              return;
+            }
+            if (sess) {
+              authListener.subscription.unsubscribe();
+              router.replace(destination);
             }
           });
 
-          // Timeout fallback
           setTimeout(() => {
             authListener.subscription.unsubscribe();
-            router.replace(next);
+            router.replace(destination);
           }, 2500);
         }
-      } catch (err: any) {
-        console.error('Auth callback error:', err);
-        setErrorMsg(err?.message || 'Authentication failed');
+      } catch (err: unknown) {
+        setErrorMsg(err instanceof Error ? err.message : 'Authentication failed');
         setTimeout(() => router.push('/login?error=auth_failed'), 2000);
       }
     };
@@ -75,7 +86,7 @@ function CallbackHandler() {
       </div>
       <div className="flex items-center gap-2 text-sm font-medium text-foreground">
         <Loader2 className="h-4 w-4 animate-spin text-primary" />
-        <span>Completing Google sign in…</span>
+        <span>Completing authentication…</span>
       </div>
     </div>
   );

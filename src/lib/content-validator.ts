@@ -1,6 +1,7 @@
 /**
  * VeraLM Content Validation & Algorithmic Heuristics
  * Performs fast, deterministic structural and quality checks with 0ms external latency.
+ * Supports Latin and non-Latin Unicode scripts (including Bengali, Arabic, CJK, etc.).
  */
 
 export interface HeuristicQualityReport {
@@ -18,11 +19,15 @@ export interface HeuristicQualityReport {
 }
 
 /**
- * Counts rough syllables in an English word for Flesch readability calculation.
+ * Counts rough syllables in a word (Latin heuristic, safe fallback for non-Latin scripts).
  */
 function countSyllables(word: string): number {
   const clean = word.toLowerCase().replace(/[^a-z]/g, '');
-  if (!clean || clean.length <= 3) return 1;
+  if (!clean) {
+    // Rough Unicode syllable estimate for non-Latin words (e.g., Bengali / CJK)
+    return Math.max(1, Math.min(6, Math.ceil(word.length / 3)));
+  }
+  if (clean.length <= 3) return 1;
 
   const syllables = clean
     .replace(/(?:[^laeiouy]|ed|es|e)$/, '')
@@ -39,12 +44,12 @@ export function validateContentHeuristics(
   const issues: string[] = [];
   const trimmed = content.trim();
 
-  // Words & Sentences extraction
   const words = trimmed.split(/\s+/).filter((w) => w.length > 0);
   const wordCount = words.length;
 
+  // Support English punctuation plus Bengali Dari (।, \u0964) and Arabic question mark
   const sentences = trimmed
-    .split(/[.!?]+(?:\s+|$)/)
+    .split(/[.!?।\u0964؟]+(?:\s+|$)/)
     .filter((s) => s.trim().length > 0);
   const sentenceCount = Math.max(1, sentences.length);
 
@@ -53,8 +58,10 @@ export function validateContentHeuristics(
     issues.push('Article must be at least 150 words to ground model responses effectively.');
   }
 
-  // 2. Lexical Diversity (Type-Token Ratio)
-  const cleanWords = words.map((w) => w.toLowerCase().replace(/[^a-z0-9]/g, '')).filter(Boolean);
+  // 2. Lexical Diversity (Unicode-aware Type-Token Ratio across all scripts)
+  const cleanWords = words
+    .map((w) => w.toLowerCase().replace(/[^\p{L}\p{N}\p{M}]/gu, ''))
+    .filter(Boolean);
   const uniqueWords = new Set(cleanWords);
   const lexicalDiversity =
     cleanWords.length > 0
@@ -88,21 +95,18 @@ export function validateContentHeuristics(
   // 5. Calculate Heuristic Quality Score (0-100)
   let score = 50;
 
-  // Length factor (up to +20)
   if (wordCount >= 800) score += 20;
   else if (wordCount >= 400) score += 15;
   else if (wordCount >= 250) score += 10;
   else if (wordCount < 150) score -= 25;
 
-  // Structural depth (up to +20)
   if (hasHeadings) score += 10;
   if (hasLists) score += 5;
   if (hasReferences || hasCodeOrMedia) score += 5;
 
-  // Vocabulary richness (up to +10)
   if (lexicalDiversity >= 0.45) score += 10;
   else if (lexicalDiversity >= 0.35) score += 5;
-  else if (lexicalDiversity < 0.22) score -= 15;
+  else if (cleanWords.length > 50 && lexicalDiversity < 0.22) score -= 15;
 
   const heuristicQualityScore = Math.max(10, Math.min(100, score));
   const readingTimeMin = Math.max(1, Math.ceil(wordCount / 220));

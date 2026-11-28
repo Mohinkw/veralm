@@ -2,18 +2,38 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { CheckCircle2, Mail, HelpCircle, Shield } from 'lucide-react';
+import { CheckCircle2, Mail, HelpCircle, Shield, AlertCircle, Loader2 } from 'lucide-react';
 import { Navbar } from '@/components/navbar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
 export default function ContactPage() {
   const [submitted, setSubmitted] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ name: '', email: '', subject: '', message: '' });
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSubmitted(true);
+    setSending(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Could not send your message.');
+      }
+      setSubmitted(true);
+      setForm({ name: '', email: '', subject: '', message: '' });
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Unable to send message right now.');
+    } finally {
+      setSending(false);
+    }
   }
 
   return (
@@ -92,12 +112,19 @@ export default function ContactPage() {
             className="bg-card border border-border rounded-xl p-6 sm:p-8 space-y-4 shadow-sm"
           >
             <h2 className="text-xl font-bold mb-1">Send a message</h2>
+            {error && (
+              <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-xs flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
             <div className="grid sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                <label htmlFor="contact-name" className="block text-xs font-medium text-muted-foreground mb-1.5">
                   Name
                 </label>
                 <Input
+                  id="contact-name"
                   required
                   placeholder="Your name"
                   value={form.name}
@@ -105,10 +132,11 @@ export default function ContactPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                <label htmlFor="contact-email" className="block text-xs font-medium text-muted-foreground mb-1.5">
                   Email
                 </label>
                 <Input
+                  id="contact-email"
                   type="email"
                   required
                   placeholder="you@example.com"
@@ -118,10 +146,11 @@ export default function ContactPage() {
               </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+              <label htmlFor="contact-subject" className="block text-xs font-medium text-muted-foreground mb-1.5">
                 Subject
               </label>
               <select
+                id="contact-subject"
                 value={form.subject}
                 onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))}
                 className="w-full h-10 bg-background border border-input rounded-md px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -137,11 +166,13 @@ export default function ContactPage() {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+              <label htmlFor="contact-message" className="block text-xs font-medium text-muted-foreground mb-1.5">
                 Message
               </label>
               <textarea
+                id="contact-message"
                 required
+                minLength={10}
                 rows={5}
                 placeholder="How can we help?"
                 value={form.message}
@@ -149,19 +180,20 @@ export default function ContactPage() {
                 className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
-            <Button type="submit" size="lg" className="w-full">
-              Send Message
+            <Button type="submit" size="lg" className="w-full gap-2" disabled={sending}>
+              {sending && <Loader2 className="h-4 w-4 animate-spin" />}
+              {sending ? 'Sending...' : 'Send Message'}
             </Button>
           </form>
         )}
 
         <div className="mt-8 flex flex-wrap justify-center gap-4 text-xs text-muted-foreground">
           <Link href="/about" className="hover:text-foreground">How VeraLM Works</Link>
-          <span>•</span>
+          <span aria-hidden="true">•</span>
           <Link href="/privacy" className="hover:text-foreground">Privacy Policy</Link>
-          <span>•</span>
+          <span aria-hidden="true">•</span>
           <Link href="/terms" className="hover:text-foreground">Terms of Service</Link>
-          <span>•</span>
+          <span aria-hidden="true">•</span>
           <Link href="/licensing" className="hover:text-foreground">Creator Licensing</Link>
         </div>
       </main>

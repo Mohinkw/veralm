@@ -3,7 +3,7 @@ import { Scale } from 'lucide-react';
 import { Navbar } from '@/components/navbar';
 
 export const metadata = {
-  title: 'Creator Licensing Agreement | VeraLM',
+  title: 'Creator Licensing Agreement',
   description:
     'VeraLM Creator Content Licensing Agreement, 90% net royalty formula, global payout methods, and content rights.',
 };

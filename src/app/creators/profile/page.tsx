@@ -2,108 +2,145 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Sparkles, ArrowLeft, User, Mail, Globe, Save, CheckCircle2, ShieldCheck, CreditCard, Lock, LogIn } from 'lucide-react';
+import { User, Globe, Save, CheckCircle2, ShieldCheck, LogIn, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useAccount } from '@/lib/account-context';
 import { supabase } from '@/lib/supabase';
+import { CreatorHeader } from '@/components/creator-header';
 import { CreatorPayoutMethods } from '@/components/creator-payout-methods';
 
 export default function CreatorProfilePage() {
-  const { user } = useAccount();
+  const { user, isLoading: authLoading } = useAccount();
 
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [website, setWebsite] = useState('');
   const [bio, setBio] = useState('');
-  const [primaryNiche, setPrimaryNiche] = useState('Technology & Engineering');
+  const [primaryNiche, setPrimaryNiche] = useState('Technology');
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [loadingProfile, setLoadingProfile] = useState(true);
 
   useEffect(() => {
-    if (user.isLoggedIn) {
-      const storageKey = `veralm_creator_profile_${user.id || user.email}`;
-      const saved = localStorage.getItem(storageKey);
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          setDisplayName(parsed.displayName || user.name || user.email?.split('@')[0] || '');
-          setEmail(parsed.email || user.email || '');
-          setWebsite(parsed.website || '');
-          setBio(parsed.bio || '');
-          setPrimaryNiche(parsed.primaryNiche || 'Technology & Engineering');
-          return;
-        } catch {
-          // ignore
+    if (authLoading) return;
+    let cancelled = false;
+
+    async function loadProfile() {
+      if (!user.isLoggedIn) {
+        if (!cancelled) {
+          setDisplayName('Creator');
+          setEmail('');
+          setBio('Verified contributor on VeraLM Knowledge Vault.');
+          setLoadingProfile(false);
         }
+        return;
       }
-      setDisplayName(user.name || user.email?.split('@')[0] || 'Creator');
-      setEmail(user.email || '');
-      setBio('Verified contributor on VeraLM Knowledge Vault.');
-    } else {
-      setDisplayName('Creator');
-      setEmail('');
-      setBio('Verified contributor on VeraLM Knowledge Vault.');
+
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          const res = await fetch('/api/creators/profile', {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+            cache: 'no-store',
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const p = data.profile;
+            if (!cancelled && p) {
+              setDisplayName(p.displayName || user.name || user.email?.split('@')[0] || '');
+              setEmail(p.email || user.email || '');
+              setWebsite(p.websiteUrl || '');
+              setBio(p.bio || '');
+              setPrimaryNiche(
+                Array.isArray(p.primaryCategories) && p.primaryCategories.length > 0
+                  ? p.primaryCategories.join(', ')
+                  : 'Technology'
+              );
+              setError('');
+              setLoadingProfile(false);
+              return;
+            }
+          }
+        }
+      } catch {
+        // Fallback below if session unavailable
+      }
+
+      if (!cancelled) {
+        setDisplayName(user.name || user.email?.split('@')[0] || 'Creator');
+        setEmail(user.email || '');
+        setBio('Verified contributor on VeraLM Knowledge Vault.');
+        setLoadingProfile(false);
+      }
     }
-  }, [user]);
+
+    void loadProfile();
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, user.id, user.isLoggedIn, user.name, user.email]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
+    setIsSaved(false);
     setIsSaving(true);
 
-    const storageKey = `veralm_creator_profile_${user.id || user.email}`;
-    localStorage.setItem(
-      storageKey,
-      JSON.stringify({
-        displayName,
-        email,
-        website,
-        bio,
-        primaryNiche,
-      })
-    );
-
     try {
-      if (user.isLoggedIn) {
-        await supabase.auth.updateUser({
-          data: { full_name: displayName },
-        });
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setError('Please sign in to save your creator profile.');
+        setIsSaving(false);
+        return;
       }
-    } catch {
-      // ignore
-    }
 
-    setIsSaving(false);
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 3000);
+      const res = await fetch('/api/creators/profile', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          displayName: displayName.trim(),
+          website: website.trim(),
+          bio: bio.trim(),
+          primaryNiche: primaryNiche.trim(),
+        }),
+      });
+
+      const body = await res.json();
+      if (!res.ok) {
+        setError(body.error || 'Could not save profile.');
+        setIsSaving(false);
+        return;
+      }
+
+      await supabase.auth.updateUser({
+        data: { full_name: displayName.trim() },
+      }).catch(() => null);
+
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 3000);
+    } catch {
+      setError('Network error saving profile.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Top Navbar */}
-      <header className="border-b border-border sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/creators/dashboard" className="text-muted-foreground hover:text-foreground">
-              <ArrowLeft className="h-5 w-5" />
-            </Link>
-            <span className="font-bold text-lg">Creator Profile & Settings</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Link href="/creators/dashboard">
-              <Button size="sm" variant="outline">Back to Studio</Button>
-            </Link>
-          </div>
-        </div>
-      </header>
+      <CreatorHeader activeTab="profile" />
 
       {/* Main Content */}
       <main className="py-8 px-4">
         <div className="container mx-auto max-w-3xl space-y-8">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Profile & Payment Settings</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Profile &amp; Payment Settings</h1>
               <p className="text-sm text-muted-foreground mt-0.5">
                 Manage your author attribution, verified expertise credentials, and payout settings.
               </p>
@@ -118,8 +155,8 @@ export default function CreatorProfilePage() {
             )}
           </div>
 
-          {!user.isLoggedIn && (
-            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 text-sm flex items-center justify-between gap-3">
+          {!authLoading && !user.isLoggedIn && (
+            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 text-sm flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <User className="h-4 w-4 shrink-0" />
                 <span>You are currently not signed in. Sign in to sync your creator profile across sessions.</span>
@@ -133,10 +170,17 @@ export default function CreatorProfilePage() {
             </div>
           )}
 
+          {error && (
+            <div role="alert" className="p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
           {isSaved && (
             <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 text-sm flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4" />
-              <span>Profile settings saved successfully!</span>
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              <span>Profile settings saved to your account!</span>
             </div>
           )}
 
@@ -146,42 +190,48 @@ export default function CreatorProfilePage() {
             <div className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-5">
               <h2 className="text-lg font-bold flex items-center gap-2">
                 <User className="h-5 w-5 text-primary" />
-                Author Identity & Attribution
+                Author Identity &amp; Attribution
               </h2>
 
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  <label htmlFor="profile-display-name" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     Display Name / Author Name
                   </label>
                   <Input
+                    id="profile-display-name"
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
-                    placeholder="e.g. Alpha"
+                    placeholder="e.g. Dr. Jane Smith"
+                    disabled={loadingProfile}
                     required
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    Email (Notifications & Payouts)
+                  <label htmlFor="profile-email" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Account Email
                   </label>
                   <Input
+                    id="profile-email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
+                    readOnly
                     type="email"
-                    placeholder="e.g. you@example.com"
+                    className="bg-muted/40"
+                    placeholder="you@example.com"
                   />
+                  <p className="text-[11px] text-muted-foreground">Managed via your account login.</p>
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                <label htmlFor="profile-website" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   Personal Website / Technical Blog / GitHub
                 </label>
                 <div className="relative">
                   <Globe className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
+                    id="profile-website"
+                    type="url"
                     value={website}
                     onChange={(e) => setWebsite(e.target.value)}
                     placeholder="https://yourdomain.com"
@@ -191,10 +241,11 @@ export default function CreatorProfilePage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  Author Bio & Expertise
+                <label htmlFor="profile-bio" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Author Bio &amp; Expertise
                 </label>
                 <Textarea
+                  id="profile-bio"
                   rows={4}
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
@@ -205,13 +256,14 @@ export default function CreatorProfilePage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                <label htmlFor="profile-niche" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   Primary Subject Specialization
                 </label>
                 <Input
+                  id="profile-niche"
                   value={primaryNiche}
                   onChange={(e) => setPrimaryNiche(e.target.value)}
-                  placeholder="e.g. Technology & Engineering, Healthcare, Law, Finance"
+                  placeholder="e.g. Technology, Science, Finance"
                 />
               </div>
             </div>
@@ -219,7 +271,7 @@ export default function CreatorProfilePage() {
             {/* Payment Methods Manager */}
             <CreatorPayoutMethods />
 
-            <Button type="submit" disabled={isSaving} className="gap-2">
+            <Button type="submit" disabled={isSaving || !user.isLoggedIn} className="gap-2">
               <Save className="h-4 w-4" />
               {isSaving ? 'Saving...' : 'Save Profile Changes'}
             </Button>

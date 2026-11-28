@@ -88,17 +88,20 @@ interface StoredConv {
 }
 
 /* ─── Persistence ─────────────────────────────────────────── */
-function loadConvs(): StoredConv[] {
+function chatStorageKey(userId?: string): string {
+  return `veralm_chats_${userId || 'guest'}`;
+}
+function loadConvs(userId?: string): StoredConv[] {
   if (typeof window === 'undefined') return [];
   try {
-    return JSON.parse(localStorage.getItem('veralm_chats') || '[]');
+    return JSON.parse(localStorage.getItem(chatStorageKey(userId)) || '[]');
   } catch {
     return [];
   }
 }
-function saveConvs(convs: StoredConv[]) {
+function saveConvs(convs: StoredConv[], userId?: string) {
   if (typeof window === 'undefined') return;
-  localStorage.setItem('veralm_chats', JSON.stringify(convs.slice(0, 60)));
+  localStorage.setItem(chatStorageKey(userId), JSON.stringify(convs.slice(0, 60)));
 }
 
 /* ─── Prompt suggestions ──────────────────────────────────── */
@@ -130,28 +133,41 @@ export default function AIChatPage() {
   const [currentId, setCurrentId] = useState('');
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [listening, setListening] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [helpMenuOpen, setHelpMenuOpen] = useState(false);
   const [sessionId] = useState(() => crypto.randomUUID());
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const messagesRef = useRef<Message[]>([]);
+  messagesRef.current = messages;
 
-  // Load stored convs on mount + collapse sidebar by default on mobile
+  // Load stored convs whenever auth user changes + open sidebar by default on desktop (>= 1024px)
   useEffect(() => {
-    setConvs(loadConvs());
+    setConvs(loadConvs(user.id));
+  }, [user.id]);
+
+  useEffect(() => {
     setCurrentId(crypto.randomUUID());
-    if (window.innerWidth < 768) {
-      setSidebarOpen(false);
+    if (window.innerWidth >= 1024) {
+      setSidebarOpen(true);
     }
 
-    // Check URL query param e.g. /?q=...
     const params = new URLSearchParams(window.location.search);
+    const cat = params.get('category');
+    if (cat) setActiveCategory(cat);
     const q = params.get('q');
+    let timer: ReturnType<typeof setTimeout> | null = null;
     if (q) {
-      setTimeout(() => ask(q), 300);
+      timer = setTimeout(() => ask(q, cat), 250);
     }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Auto-scroll
@@ -167,7 +183,7 @@ export default function AIChatPage() {
     ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
   };
 
-  // Persist conversation
+  // Persist conversation per user
   useEffect(() => {
     if (!messages.length || !currentId) return;
     const title = messages[0].content.slice(0, 50) + (messages[0].content.length > 50 ? '…' : '');
@@ -179,14 +195,14 @@ export default function AIChatPage() {
     };
     setConvs(prev => {
       const updated = [conv, ...prev.filter(c => c.id !== currentId)];
-      saveConvs(updated);
+      saveConvs(updated, user.id);
       return updated;
     });
-  }, [messages, currentId]);
+  }, [messages, currentId, user.id]);
 
   /* ── Send Prompt ── */
   const ask = useCallback(
-    async (queryText: string) => {
+    async (queryText: string, categoryOverride?: string | null) => {
       if (!queryText.trim() || loading) return;
       setInput('');
       if (textareaRef.current) {
@@ -195,6 +211,10 @@ export default function AIChatPage() {
 
       const userId = crypto.randomUUID();
       const asstId = crypto.randomUUID();
+      const priorHistory = messagesRef.current
+        .filter((m) => m.content && !m.error)
+        .slice(-8)
+        .map((m) => ({ role: m.role, content: m.content }));
 
       setMessages(prev => [
         ...prev,
@@ -204,15 +224,29 @@ export default function AIChatPage() {
       setLoading(true);
 
       try {
-        const history = messages
-          .filter((m) => m.content && !m.error)
-          .slice(-8)
-          .map((m) => ({ role: m.role, content: m.content }));
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (typeof window !== 'undefined') {
+          try {
+            const { supabase } = await import('@/lib/supabase');
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.access_token) {
+              headers['Authorization'] = `Bearer ${session.access_token}`;
+            }
+          } catch {
+            // proceed unauthenticated
+          }
+        }
 
+        const cat = categoryOverride !== undefined ? categoryOverride : activeCategory;
         const res = await fetch('/api/chat', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: queryText.trim(), session_id: sessionId, history }),
+          headers,
+          body: JSON.stringify({
+            query: queryText.trim(),
+            session_id: sessionId,
+            history: priorHistory,
+            ...(cat ? { category: cat } : {}),
+          }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to generate response');
@@ -234,8 +268,39 @@ export default function AIChatPage() {
         setLoading(false);
       }
     },
-    [loading, sessionId]
+    [loading, sessionId, activeCategory]
   );
+
+  const handleVoiceInput = () => {
+    if (typeof window === 'undefined') return;
+    const SpeechRec =
+      (window as unknown as Record<string, unknown>).SpeechRecognition ||
+      (window as unknown as Record<string, unknown>).webkitSpeechRecognition;
+    if (typeof SpeechRec !== 'function') {
+      textareaRef.current?.focus();
+      return;
+    }
+    const recognition = new (SpeechRec as new () => {
+      lang: string;
+      interimResults: boolean;
+      onresult: ((ev: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+      onerror: (() => void) | null;
+      onend: (() => void) | null;
+      start: () => void;
+    })();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    setListening(true);
+    recognition.onresult = (ev) => {
+      const text = ev.results?.[0]?.[0]?.transcript || '';
+      if (text) {
+        setInput((prev) => (prev ? `${prev} ${text}` : text));
+      }
+    };
+    recognition.onerror = () => setListening(false);
+    recognition.onend = () => setListening(false);
+    recognition.start();
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -264,13 +329,14 @@ export default function AIChatPage() {
     setCurrentId(c.id);
   };
 
-  const sendFeedback = async (queryId: string, msgId: string, rating: 1 | -1) => {
+  const sendFeedback = async (queryId: string | undefined, msgId: string, rating: 1 | -1) => {
     setMessages(prev => prev.map(m => (m.id === msgId ? { ...m, feedback: rating } : m)));
+    if (!queryId) return;
     try {
       await fetch('/api/search/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query_id: queryId, rating }),
+        body: JSON.stringify({ query_id: queryId, session_id: sessionId, rating }),
       });
     } catch {}
   };
@@ -293,10 +359,10 @@ export default function AIChatPage() {
 
   return (
     <div className="flex h-[100dvh] overflow-hidden bg-background text-foreground relative">
-      {/* Mobile Sidebar Backdrop */}
+      {/* Mobile & Tablet Sidebar Backdrop */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-30 bg-black/50 md:hidden"
+          className="fixed inset-0 z-30 bg-black/50 lg:hidden"
           onClick={() => setSidebarOpen(false)}
           aria-hidden="true"
         />
@@ -308,7 +374,7 @@ export default function AIChatPage() {
           'flex flex-col shrink-0 transition-all duration-200 border-r border-border',
           'bg-card dark:bg-[#171717]',
           sidebarOpen
-            ? 'fixed inset-y-0 left-0 z-40 w-72 max-w-[85vw] shadow-2xl overflow-visible md:static md:z-auto md:w-64 md:shadow-none'
+            ? 'fixed inset-y-0 left-0 z-40 w-72 max-w-[85vw] shadow-2xl overflow-visible lg:static lg:z-auto lg:w-64 lg:shadow-none'
             : 'w-0 overflow-hidden border-r-0'
         )}
       >
@@ -368,11 +434,12 @@ export default function AIChatPage() {
           </span>
           {convs.length > 0 && (
             <button
+              type="button"
               onClick={() => {
                 setConvs([]);
-                localStorage.removeItem('veralm_chats');
+                localStorage.removeItem(chatStorageKey(user.id));
               }}
-              className="text-[10px] text-muted-foreground hover:text-foreground"
+              className="text-xs px-2 py-1 text-muted-foreground hover:text-foreground"
             >
               Clear
             </button>
@@ -597,9 +664,10 @@ export default function AIChatPage() {
       {/* ════════════ MAIN CONTENT ════════════ */}
       <main className="flex-1 flex flex-col min-w-0 relative bg-background">
         {/* Floating Topbar */}
-        <header className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-3 sm:px-4 py-3 pointer-events-none">
-          <div className="flex items-center gap-2 pointer-events-auto">
+        <header className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-3 sm:px-4 py-3 pointer-events-none gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 pointer-events-auto shrink-0">
             <button
+              type="button"
               onClick={() => setSidebarOpen(o => !o)}
               className="p-2 rounded-xl hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
               aria-label={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
@@ -611,48 +679,49 @@ export default function AIChatPage() {
                 <PanelLeftOpen className="h-5 w-5" />
               )}
             </button>
-            <div className="hidden xs:flex sm:flex items-center gap-1.5 px-3 py-1 rounded-full border border-border bg-card/80 backdrop-blur text-xs font-medium">
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full border border-border bg-card/80 backdrop-blur text-xs font-medium whitespace-nowrap">
               <VeraLMLogo className="h-3.5 w-3.5" size={14} />
               <span>VeraLM</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-2 pointer-events-auto">
+          <div className="flex items-center gap-1.5 sm:gap-2 pointer-events-auto shrink-0">
             {!user.isPro && (
               <Link
                 href="/pro"
-                className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-semibold border border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition-colors"
+                className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-semibold border border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition-colors whitespace-nowrap"
               >
-                <Crown className="h-3.5 w-3.5 text-amber-500" />
-                <span className="hidden sm:inline">Upgrade to Pro</span>
-                <span className="sm:hidden">Pro</span>
+                <Crown className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                <span className="hidden lg:inline">Upgrade to Pro</span>
+                <span className="lg:hidden">Pro</span>
               </Link>
             )}
             {/* Earn as a Creator */}
             <Link
               href={user.isLoggedIn ? '/creators/dashboard' : '/creators'}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-semibold border transition-all bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-semibold border transition-all bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20 whitespace-nowrap"
             >
-              <TrendingUp className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Earn as a Creator</span>
-              <span className="sm:hidden">Earn</span>
+              <TrendingUp className="h-3.5 w-3.5 shrink-0" />
+              <span className="hidden lg:inline">Earn as a Creator</span>
+              <span className="lg:hidden">Earn</span>
             </Link>
 
             <ThemeToggle />
 
             {!user.isLoggedIn ? (
               <Link
-                href="/register"
-                className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors"
+                href="/login"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors whitespace-nowrap"
               >
-                <UserCheck className="h-3.5 w-3.5" />
-                <span>Create Account</span>
+                <UserCheck className="h-3.5 w-3.5 hidden sm:inline" />
+                <span>Sign In</span>
               </Link>
             ) : (
               <Link
                 href="/creators/profile"
-                className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold hover:ring-2 hover:ring-primary transition-all"
+                className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold hover:ring-2 hover:ring-primary transition-all shrink-0"
                 title={`Profile: ${user.name || user.email}`}
+                aria-label="Account profile"
               >
                 {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
               </Link>
@@ -688,15 +757,23 @@ export default function AIChatPage() {
                     onChange={handleTextareaChange}
                     onKeyDown={handleKeyDown}
                     rows={1}
-                    placeholder="Prompt the VeraLM AI Model…"
+                    aria-label="Prompt VeraLM AI Model"
+                    placeholder="Ask VeraLM anything…"
                     disabled={loading}
                     className="flex-1 resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none leading-relaxed max-h-[200px] overflow-y-auto disabled:opacity-50 py-1"
                   />
                   <div className="flex items-center gap-1 shrink-0">
                     <button
                       type="button"
-                      className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                      onClick={handleVoiceInput}
+                      className={cn(
+                        'p-2 rounded-xl transition-colors',
+                        listening
+                          ? 'text-red-500 bg-red-500/10'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                      )}
                       aria-label="Voice input"
+                      title="Voice input"
                     >
                       <Mic className="h-4 w-4" />
                     </button>
@@ -730,12 +807,12 @@ export default function AIChatPage() {
                 ))}
               </div>
 
-              <div className="pt-4 flex items-center justify-center gap-4 text-xs text-muted-foreground">
+              <div className="pt-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                 <span>Free AI Chatbot</span>
-                <span>•</span>
+                <span aria-hidden="true">•</span>
                 <span>Real Human Knowledge</span>
-                <span>•</span>
-                <Link href="/creators/apply" className="text-primary hover:underline">
+                <span aria-hidden="true">•</span>
+                <Link href="/creators" className="text-primary hover:underline whitespace-nowrap">
                   Earn Royalties as Creator →
                 </Link>
               </div>
@@ -790,7 +867,9 @@ export default function AIChatPage() {
                               {/* Action Bar */}
                               <div className="flex items-center gap-1.5 mt-3 flex-wrap">
                                 <button
+                                  type="button"
                                   onClick={() => copyText(msg.content, msg.id)}
+                                  aria-label="Copy response"
                                   className={cn(
                                     'inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs transition-colors',
                                     msg.copied
@@ -805,6 +884,7 @@ export default function AIChatPage() {
                                 {msg.response && (
                                   <>
                                     <button
+                                      type="button"
                                       onClick={() => sendFeedback(msg.response!.query_id, msg.id, 1)}
                                       className={cn(
                                         'p-1.5 rounded-lg text-xs transition-colors',
@@ -812,11 +892,13 @@ export default function AIChatPage() {
                                           ? 'text-green-600 dark:text-green-400'
                                           : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                                       )}
+                                      aria-label="Mark answer helpful"
                                       title="Helpful"
                                     >
                                       <ThumbsUp className="h-3.5 w-3.5" />
                                     </button>
                                     <button
+                                      type="button"
                                       onClick={() => sendFeedback(msg.response!.query_id, msg.id, -1)}
                                       className={cn(
                                         'p-1.5 rounded-lg text-xs transition-colors',
@@ -824,6 +906,7 @@ export default function AIChatPage() {
                                           ? 'text-red-500'
                                           : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                                       )}
+                                      aria-label="Mark answer not helpful"
                                       title="Not helpful"
                                     >
                                       <ThumbsDown className="h-3.5 w-3.5" />
@@ -836,7 +919,9 @@ export default function AIChatPage() {
                               {msg.response && msg.response.articles_used.length > 0 && (
                                 <div className="mt-4 rounded-xl border border-border bg-card/60 overflow-hidden">
                                   <button
+                                    type="button"
                                     onClick={() => toggleSources(msg.id)}
+                                    aria-expanded={Boolean(msg.sourcesOpen)}
                                     className="w-full flex items-center justify-between px-4 py-2.5 bg-accent/40 hover:bg-accent transition-colors text-xs font-semibold"
                                   >
                                     <span className="flex items-center gap-2 text-foreground">
@@ -936,6 +1021,7 @@ export default function AIChatPage() {
                       onChange={handleTextareaChange}
                       onKeyDown={handleKeyDown}
                       rows={1}
+                      aria-label="Ask VeraLM anything"
                       placeholder="Ask VeraLM anything…"
                       disabled={loading}
                       className="flex-1 resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none leading-relaxed max-h-[200px] overflow-y-auto disabled:opacity-50 py-1"
@@ -943,8 +1029,15 @@ export default function AIChatPage() {
                     <div className="flex items-center gap-1 shrink-0">
                       <button
                         type="button"
-                        className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                        onClick={handleVoiceInput}
+                        className={cn(
+                          'p-2 rounded-xl transition-colors',
+                          listening
+                            ? 'text-red-500 bg-red-500/10'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                        )}
                         aria-label="Voice input"
+                        title="Voice input"
                       >
                         <Mic className="h-4 w-4" />
                       </button>

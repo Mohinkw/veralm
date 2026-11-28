@@ -3,16 +3,21 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { articles, categories, creatorProfiles, users } from '@/db/schema';
 import { requireAdmin } from '@/lib/admin/auth';
+import { isValidUuid } from '@/lib/auth/request';
 
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireAdmin(request);
-  if (auth.error) return auth.error;
-
   try {
+    const auth = await requireAdmin(request);
+    if (auth.error) return auth.error;
+
     const { id } = await context.params;
+    if (!isValidUuid(id)) {
+      return NextResponse.json({ error: 'Invalid article ID.' }, { status: 400 });
+    }
+
     const [row] = await db
       .select({
         id: articles.id,
@@ -27,7 +32,8 @@ export async function GET(
         compositeQualityScore: articles.compositeQualityScore,
         originalityScore: articles.originalityScore,
         aiProbabilityScore: articles.aiProbabilityScore,
-        reviewNotes: articles.rejectionReason,
+        rejectionReason: articles.rejectionReason,
+        revisionInstructions: articles.revisionInstructions,
         authorName: creatorProfiles.displayName,
         authorEmail: users.email,
         categoryName: categories.name,
@@ -44,7 +50,12 @@ export async function GET(
     }
 
     return NextResponse.json(
-      { article: row },
+      {
+        article: {
+          ...row,
+          reviewNotes: row.rejectionReason || row.revisionInstructions || null,
+        },
+      },
       { headers: { 'Cache-Control': 'private, no-store' } }
     );
   } catch (err) {

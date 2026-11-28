@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -46,15 +47,47 @@ export function formatRelativeTime(date: string | Date): string {
 }
 
 export function slugify(text: string): string {
-  return text
+  const trimmed = text.normalize('NFKC').trim();
+  const ascii = trimmed
     .toLowerCase()
-    .trim()
     .replace(/[^\w\s-]/g, '')
     .replace(/[\s_-]+/g, '-')
     .replace(/^-+|-+$/g, '');
+
+  if (ascii.length > 0) return ascii;
+  if (trimmed.length === 0) return '';
+
+  // Deterministic URL-safe fallback for non-Latin scripts (e.g. Bengali, Arabic, CJK)
+  const hash = crypto.createHash('sha256').update(trimmed).digest('hex').slice(0, 10);
+  return `post-${hash}`;
 }
 
 export const generateSlug = slugify;
+
+/**
+ * Allows only safe http/https URLs for rendered links and external media.
+ */
+export function sanitizeHttpUrl(raw?: string | null): string | null {
+  if (!raw || typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return parsed.toString();
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Serializes JSON-LD safely for inline <script> injection without closing-tag XSS.
+ */
+export function safeJsonLd(data: unknown): string {
+  return JSON.stringify(data).replace(/</g, '\\u003c');
+}
 
 export function truncate(text: string, length: number): string {
   if (text.length <= length) return text;
@@ -72,8 +105,10 @@ export function getInitials(name: string): string {
 
 export function calculateReadingTime(content: string): number {
   const wordsPerMinute = 200;
-  const wordCount = content.split(/\s+/).length;
-  return Math.ceil(wordCount / wordsPerMinute);
+  const trimmed = content.trim();
+  if (!trimmed) return 0;
+  const wordCount = trimmed.split(/\s+/).length;
+  return Math.max(1, Math.ceil(wordCount / wordsPerMinute));
 }
 
 export function generateSessionId(): string {
@@ -151,7 +186,7 @@ export function normalizeContributions(scores: Record<string, number>): Record<s
 
 export function getSiteUrl(): string {
   const envUrl = process.env.NEXT_PUBLIC_APP_URL;
-  if (envUrl && !envUrl.includes('localhost')) {
+  if (envUrl && (!envUrl.includes('localhost') || !process.env.VERCEL)) {
     return envUrl.replace(/\/+$/, '');
   }
   if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {

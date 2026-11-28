@@ -64,6 +64,7 @@ async function createStripeConnectTransfer(opts: {
     headers: {
       Authorization: `Bearer ${stripeKey}`,
       'Content-Type': 'application/x-www-form-urlencoded',
+      'Idempotency-Key': `veralm_payout_${opts.earningId}`,
     },
     body: params.toString(),
   });
@@ -77,16 +78,17 @@ async function createStripeConnectTransfer(opts: {
 }
 
 /**
- * Executes payouts for all `confirmed` creator_earnings rows that meet the creator's
- * minimum payout threshold. Stripe Connect transfers are executed immediately when
- * STRIPE_SECRET_KEY is configured; other rails (Wise, Payoneer, PayPal, Bank Wire, Crypto)
- * are transitioned to `pending_payout` with a masked batch reference.
+ * Executes payouts atomically for all `confirmed` creator_earnings rows belonging to active creators
+ * that meet the creator's minimum payout threshold.
  */
 export async function executeCreatorPayouts(options?: {
   period?: string;
   actorId?: string;
 }): Promise<PayoutExecutionSummary> {
-  const conditions = [eq(creatorEarnings.status, 'confirmed')];
+  const conditions = [
+    eq(creatorEarnings.status, 'confirmed'),
+    eq(creatorProfiles.isActive, true),
+  ];
   if (options?.period) {
     conditions.push(eq(creatorEarnings.revenuePeriod, options.period));
   }
@@ -157,6 +159,27 @@ export async function executeCreatorPayouts(options?: {
       continue;
     }
 
+    // Atomically claim the `confirmed` row before executing an external transfer to prevent concurrent double-payouts
+    const [claimed] = await db
+      .update(creatorEarnings)
+      .set({ status: 'pending_payout', updatedAt: new Date() })
+      .where(and(eq(creatorEarnings.id, row.earningId), eq(creatorEarnings.status, 'confirmed')))
+      .returning({ id: creatorEarnings.id });
+
+    if (!claimed) {
+      skippedCount++;
+      items.push({
+        earningId: row.earningId,
+        creatorId: row.creatorId,
+        revenuePeriod: row.revenuePeriod,
+        amountUsd,
+        methodType,
+        status: 'skipped',
+        reason: 'Already claimed by concurrent payout run',
+      });
+      continue;
+    }
+
     if (methodType === 'stripe_connect') {
       const destination =
         row.stripeAccountId ||
@@ -168,7 +191,6 @@ export async function executeCreatorPayouts(options?: {
         await db
           .update(creatorEarnings)
           .set({
-            status: 'pending_payout',
             notes: !process.env.STRIPE_SECRET_KEY
               ? 'Queued: STRIPE_SECRET_KEY not configured'
               : `Queued for Stripe Connect (${maskIdentifier(defaultMethod?.accountIdentifier || '')})`,
@@ -191,70 +213,93 @@ export async function executeCreatorPayouts(options?: {
         continue;
       }
 
-      const transferId = await createStripeConnectTransfer({
-        amountUsd,
-        destinationAccountId: destination,
-        revenuePeriod: row.revenuePeriod,
-        earningId: row.earningId,
-        creatorId: row.creatorId,
-      });
+      try {
+        const transferId = await createStripeConnectTransfer({
+          amountUsd,
+          destinationAccountId: destination,
+          revenuePeriod: row.revenuePeriod,
+          earningId: row.earningId,
+          creatorId: row.creatorId,
+        });
 
-      const now = new Date();
-      await db
-        .update(creatorEarnings)
-        .set({
-          status: 'paid',
-          stripeTransferId: transferId,
-          paidAt: now,
-          notes: `Paid via Stripe Connect (${transferId})`,
-          updatedAt: now,
-        })
-        .where(eq(creatorEarnings.id, row.earningId));
+        const now = new Date();
+        await db.transaction(async (tx) => {
+          await tx
+            .update(creatorEarnings)
+            .set({
+              status: 'paid',
+              stripeTransferId: transferId,
+              paidAt: now,
+              notes: `Paid via Stripe Connect (${transferId})`,
+              updatedAt: now,
+            })
+            .where(eq(creatorEarnings.id, row.earningId));
 
-      await db
-        .update(creatorProfiles)
-        .set({
-          totalLifetimeEarnings: sql`${creatorProfiles.totalLifetimeEarnings} + ${amountUsd.toFixed(4)}::numeric`,
-          updatedAt: now,
-        })
-        .where(eq(creatorProfiles.id, row.creatorId));
+          await tx
+            .update(creatorProfiles)
+            .set({
+              totalLifetimeEarnings: sql`${creatorProfiles.totalLifetimeEarnings} + ${amountUsd.toFixed(4)}::numeric`,
+              updatedAt: now,
+            })
+            .where(eq(creatorProfiles.id, row.creatorId));
 
-      await db.insert(auditLog).values({
-        actorId: options?.actorId || null,
-        actorRole: options?.actorId ? 'admin' : 'system',
-        action: 'creator.payout_executed',
-        entityType: 'creator_earnings',
-        entityId: row.earningId,
-        metadata: {
+          await tx.insert(auditLog).values({
+            actorId: options?.actorId || null,
+            actorRole: options?.actorId ? 'admin' : 'system',
+            action: 'creator.payout_executed',
+            entityType: 'creator_earnings',
+            entityId: row.earningId,
+            metadata: {
+              creatorId: row.creatorId,
+              revenuePeriod: row.revenuePeriod,
+              amountUsd,
+              methodType,
+              transferId,
+            },
+          });
+        });
+
+        paidCount++;
+        totalPaidUsd += amountUsd;
+        items.push({
+          earningId: row.earningId,
           creatorId: row.creatorId,
           revenuePeriod: row.revenuePeriod,
           amountUsd,
           methodType,
-          transferId,
-        },
-      });
+          status: 'paid',
+          reference: transferId,
+        });
+      } catch (transferErr) {
+        const msg = transferErr instanceof Error ? transferErr.message : 'Transfer error';
+        await db
+          .update(creatorEarnings)
+          .set({
+            status: 'confirmed',
+            notes: `Transfer retry needed: ${msg.slice(0, 200)}`,
+            updatedAt: new Date(),
+          })
+          .where(eq(creatorEarnings.id, row.earningId));
 
-      paidCount++;
-      totalPaidUsd += amountUsd;
-      items.push({
-        earningId: row.earningId,
-        creatorId: row.creatorId,
-        revenuePeriod: row.revenuePeriod,
-        amountUsd,
-        methodType,
-        status: 'paid',
-        reference: transferId,
-      });
+        skippedCount++;
+        items.push({
+          earningId: row.earningId,
+          creatorId: row.creatorId,
+          revenuePeriod: row.revenuePeriod,
+          amountUsd,
+          methodType,
+          status: 'skipped',
+          reason: msg,
+        });
+      }
       continue;
     }
 
-    // Non-Stripe rails (wise, payoneer, paypal, bank_wire, crypto) queued for batch settlement
     const masked = maskIdentifier(defaultMethod?.accountIdentifier || '');
     const batchNote = `Queued for ${methodType} payout (${masked}, ${defaultMethod?.currency || 'USD'})`;
     await db
       .update(creatorEarnings)
       .set({
-        status: 'pending_payout',
         notes: batchNote,
         updatedAt: new Date(),
       })

@@ -23,6 +23,7 @@ export function ThemeToggle() {
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>
         <button
+          type="button"
           aria-label="Toggle theme"
           className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
         >

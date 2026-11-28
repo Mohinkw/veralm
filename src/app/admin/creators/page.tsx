@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { useAccount } from '@/lib/account-context';
 import { AdminHeader } from '@/components/admin-header';
 
 type CreatorRow = {
@@ -23,6 +24,7 @@ type CreatorRow = {
 };
 
 export default function AdminCreatorsPage() {
+  const { user, isLoading: authLoading } = useAccount();
   const [creators, setCreators] = useState<CreatorRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -48,8 +50,10 @@ export default function AdminCreatorsPage() {
   }, []);
 
   useEffect(() => {
-    fetchCreators();
-  }, [fetchCreators]);
+    if (!authLoading) {
+      void fetchCreators();
+    }
+  }, [authLoading, user.id, fetchCreators]);
 
   const toggleStatus = async (creatorId: string, nextActive: boolean) => {
     setBusyId(creatorId);
@@ -100,89 +104,90 @@ export default function AdminCreatorsPage() {
   const totalPaid = creators.reduce((s, c) => s + Number(c.totalLifetimeEarnings || 0), 0);
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100">
+    <div className="min-h-screen bg-background text-foreground">
       <AdminHeader activeTab="creators" />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
 
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <div>
-            <h1 className="text-3xl font-bold">Creator Management</h1>
-            <p className="text-gray-400 mt-1">{creators.length} registered creators</p>
+            <h1 className="text-2xl sm:text-3xl font-bold">Creator Management</h1>
+            <p className="text-muted-foreground mt-1 text-sm">{creators.length} registered creators</p>
           </div>
           <button
+            type="button"
             onClick={exportCsv}
             disabled={creators.length === 0}
-            className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium"
+            className="bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium self-start sm:self-auto"
           >
             Export CSV
           </button>
         </div>
 
         {error && (
-          <div className="mb-6 bg-red-950/60 border border-red-800 text-red-200 px-4 py-3 rounded-lg text-sm">
+          <div role="alert" className="mb-6 bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded-lg text-sm">
             {error} <Link href="/login" className="underline ml-2">Sign in</Link>
           </div>
         )}
 
-        <div className="grid sm:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {[
             { label: 'Total Creators', value: creators.length },
             { label: 'Active', value: activeCount },
             { label: 'Payout Ready', value: payoutReadyCount },
             { label: 'Total Paid Out', value: `$${totalPaid.toFixed(2)}` },
           ].map((s) => (
-            <div key={s.label} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-              <div className="text-2xl font-bold text-white">{s.value}</div>
-              <div className="text-sm text-gray-400 mt-1">{s.label}</div>
+            <div key={s.label} className="bg-card border border-border rounded-xl p-4 shadow-sm">
+              <div className="text-2xl font-bold">{s.value}</div>
+              <div className="text-sm text-muted-foreground mt-1">{s.label}</div>
             </div>
           ))}
         </div>
 
-        <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-x-auto">
+        <div className="bg-card border border-border rounded-xl overflow-x-auto shadow-sm">
           <table className="w-full text-sm">
-            <thead className="bg-gray-800 text-gray-300">
+            <thead className="bg-muted/50 text-muted-foreground border-b border-border">
               <tr>
                 {['Creator', 'Categories', 'Articles', 'Total Earned', 'Payout', 'Status', 'Actions'].map((h) => (
                   <th key={h} className="px-4 py-3 text-left font-medium">{h}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-800">
+            <tbody className="divide-y divide-border">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-400">Loading creators...</td>
+                  <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Loading creators...</td>
                 </tr>
               ) : creators.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-400">No creators found.</td>
+                  <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">No creators found.</td>
                 </tr>
               ) : (
                 creators.map((c) => (
-                  <tr key={c.id} className="hover:bg-gray-800/50">
+                  <tr key={c.id} className="hover:bg-muted/30">
                     <td className="px-4 py-3">
-                      <Link href={`/creators/${c.slug}`} className="font-medium text-white hover:underline">
+                      <Link href={`/creators/${c.slug}`} className="font-medium hover:underline">
                         {c.displayName}
                       </Link>
-                      <div className="text-xs text-gray-500">{c.email}</div>
+                      <div className="text-xs text-muted-foreground">{c.email}</div>
                     </td>
-                    <td className="px-4 py-3 text-gray-300">
+                    <td className="px-4 py-3 text-muted-foreground">
                       {(c.primaryCategories || []).join(', ') || '—'}
                     </td>
-                    <td className="px-4 py-3 text-gray-300">{c.totalArticlesApproved}</td>
-                    <td className="px-4 py-3 text-green-400 font-medium">
+                    <td className="px-4 py-3">{c.totalArticlesApproved}</td>
+                    <td className="px-4 py-3 text-emerald-600 dark:text-emerald-400 font-medium">
                       ${Number(c.totalLifetimeEarnings || 0).toFixed(2)}
                     </td>
                     <td className="px-4 py-3">
                       {c.stripeAccountId || c.payoutMethodsCount > 0 ? (
-                        <span className="text-green-400 text-xs">Configured ({c.payoutMethodsCount})</span>
+                        <span className="text-emerald-600 dark:text-emerald-400 text-xs">Configured ({c.payoutMethodsCount})</span>
                       ) : (
-                        <span className="text-yellow-400 text-xs">Not configured</span>
+                        <span className="text-amber-600 dark:text-amber-400 text-xs">Not configured</span>
                       )}
                     </td>
                     <td className="px-4 py-3">
                       <span
                         className={`text-xs px-2 py-0.5 rounded-full ${
-                          c.isActive ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'
+                          c.isActive ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-destructive/15 text-destructive'
                         }`}
                       >
                         {c.isActive ? 'active' : 'suspended'}
@@ -190,9 +195,10 @@ export default function AdminCreatorsPage() {
                     </td>
                     <td className="px-4 py-3">
                       <button
+                        type="button"
                         disabled={busyId === c.id}
                         onClick={() => toggleStatus(c.id, !c.isActive)}
-                        className="text-xs px-2.5 py-1 rounded border border-gray-700 hover:bg-gray-800 text-gray-200 disabled:opacity-50"
+                        className="text-xs px-2.5 py-1 rounded border border-border hover:bg-accent disabled:opacity-50"
                       >
                         {c.isActive ? 'Suspend' : 'Activate'}
                       </button>

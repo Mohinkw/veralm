@@ -1,16 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { eq } from 'drizzle-orm';
-import { requireUser } from '@/lib/auth/request';
+import { parseJsonObject, requireUser } from '@/lib/auth/request';
 import { db } from '@/db/client';
 import { users } from '@/db/schema';
+import { signSessionCookie } from '@/lib/citation-token';
 import { getSiteUrl } from '@/lib/utils';
 
 export async function POST(request: NextRequest) {
   const auth = await requireUser(request);
   if ('error' in auth) return auth.error;
 
+  const parsed = await parseJsonObject(request);
+  if ('error' in parsed) return parsed.error;
+
   try {
-    const body = await request.json().catch(() => ({}));
+    const body = parsed.data;
     const billingCycle = body.billingCycle === 'annual' ? 'annual' : 'monthly';
     const siteUrl = getSiteUrl();
 
@@ -71,13 +75,15 @@ export async function POST(request: NextRequest) {
         'line_items[0][quantity]': '1',
         success_url: `${siteUrl}/pro?upgraded=1`,
         cancel_url: `${siteUrl}/pro?canceled=1`,
-        customer_email: auth.user.email || '',
         client_reference_id: auth.user.id,
         'metadata[userId]': auth.user.id,
         'metadata[billingCycle]': billingCycle,
         'subscription_data[metadata][userId]': auth.user.id,
         'subscription_data[metadata][billingCycle]': billingCycle,
       });
+      if (auth.user.email) {
+        params.set('customer_email', auth.user.email);
+      }
 
       const stripeRes = await fetch('https://api.stripe.com/v1/checkout/sessions', {
         method: 'POST',
@@ -128,9 +134,10 @@ export async function POST(request: NextRequest) {
         subscriptionTier: 'pro',
         proExpiresAt: expiresAt.toISOString(),
       });
-      res.cookies.set('veralm_pro_uid', auth.user.id, {
+      res.cookies.set('veralm_pro_uid', signSessionCookie(auth.user.id, days * 24 * 60 * 60), {
         httpOnly: true,
         sameSite: 'lax',
+        secure: false,
         path: '/',
         maxAge: days * 24 * 60 * 60,
       });

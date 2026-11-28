@@ -4,7 +4,7 @@ import { Navbar } from '@/components/navbar';
 import { BLOG_POSTS as posts } from '@/lib/blog-posts';
 
 export const metadata = {
-  title: 'Blog & Release Notes | VeraLM',
+  title: 'Blog & Release Notes',
   description:
     'Platform updates, release notes, and knowledge economy insights from the VeraLM team.',
 };

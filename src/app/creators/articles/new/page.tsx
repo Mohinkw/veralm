@@ -21,19 +21,14 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { calculateReadingTime } from '@/lib/utils';
+import { calculateReadingTime, sanitizeHttpUrl } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 
-const CATEGORIES = [
-  { id: '1', name: 'Technology' },
-  { id: '2', name: 'Personal Finance' },
-  { id: '3', name: 'Health & Wellness' },
-  { id: '4', name: 'Travel' },
-  { id: '5', name: 'Food & Cooking' },
-  { id: '6', name: 'Business' },
-  { id: '7', name: 'Science' },
-  { id: '8', name: 'Education' },
-];
+interface CategoryOption {
+  id: string;
+  name: string;
+  slug: string;
+}
 
 export default function NewArticlePage() {
   const router = useRouter();
@@ -43,14 +38,40 @@ export default function NewArticlePage() {
   const [success, setSuccess] = useState(false);
   const [wordCount, setWordCount] = useState(0);
   const [readingTime, setReadingTime] = useState(0);
+  const [categoriesList, setCategoriesList] = useState<CategoryOption[]>([]);
+  const [categoriesError, setCategoriesError] = useState<string | null>(null);
 
   // Clean, focused state
   const [title, setTitle] = useState('');
-  const [categoryId, setCategoryId] = useState('1'); // Default to Technology
+  const [categoryId, setCategoryId] = useState('');
   const [tags, setTags] = useState('');
   const [content, setContent] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [images, setImages] = useState<string[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/categories');
+        const data = await res.json();
+        if (!res.ok || !Array.isArray(data?.categories)) {
+          throw new Error(data?.error || 'Could not load categories.');
+        }
+        if (!cancelled) {
+          setCategoriesList(data.categories);
+          setCategoryId((prev) => prev || data.categories[0]?.id || '');
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setCategoriesError(err?.message || 'Unable to load categories.');
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Update live word count & reading time
   useEffect(() => {
@@ -60,8 +81,15 @@ export default function NewArticlePage() {
   }, [content]);
 
   const addImage = () => {
-    if (!imageUrl.trim()) return;
-    setImages((prev) => [...prev, imageUrl.trim()]);
+    const trimmed = imageUrl.trim();
+    if (!trimmed) return;
+    const safe = sanitizeHttpUrl(trimmed);
+    if (!safe) {
+      setError('Image URL must start with https:// or http://');
+      return;
+    }
+    setError(null);
+    setImages((prev) => (prev.includes(safe) ? prev : [...prev, safe]));
     setImageUrl('');
   };
 
@@ -74,7 +102,7 @@ export default function NewArticlePage() {
       setError('Article title is required');
       return false;
     }
-    if (title.length < 5) {
+    if (title.trim().length < 5) {
       setError('Title must be at least 5 characters');
       return false;
     }
@@ -82,7 +110,7 @@ export default function NewArticlePage() {
       setError('Please select a category');
       return false;
     }
-    if (!content.trim() || content.length < 100) {
+    if (!content.trim() || content.trim().length < 100) {
       setError('Please write at least 100 characters for your article');
       return false;
     }
@@ -91,9 +119,19 @@ export default function NewArticlePage() {
 
   const submitPost = async (status: 'draft' | 'pending_review') => {
     if (status === 'pending_review' && !validate()) return;
-    if (status === 'draft' && !title.trim()) {
-      setError('Title is required to save draft');
-      return;
+    if (status === 'draft') {
+      if (!title.trim() || title.trim().length < 3) {
+        setError('Title (at least 3 characters) is required to save draft');
+        return;
+      }
+      if (!categoryId) {
+        setError('Please wait for categories to load or select a category');
+        return;
+      }
+      if (!content.trim() || content.trim().length < 20) {
+        setError('Please write at least 20 characters to save a draft');
+        return;
+      }
     }
 
     if (status === 'draft') setIsSaving(true);
@@ -232,30 +270,43 @@ export default function NewArticlePage() {
           <div className="grid sm:grid-cols-2 gap-6">
             {/* Category Dropdown */}
             <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
-              <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+              <label
+                htmlFor="categoryId"
+                className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5"
+              >
                 <BookOpen className="h-4 w-4 text-primary" />
                 Category *
               </label>
               <select
+                id="categoryId"
                 value={categoryId}
                 onChange={(e) => setCategoryId(e.target.value)}
+                disabled={categoriesList.length === 0}
                 className="w-full h-11 rounded-xl border border-input bg-background px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all font-medium"
               >
-                {CATEGORIES.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.name}
-                  </option>
-                ))}
+                {categoriesList.length === 0 ? (
+                  <option value="">{categoriesError || 'Loading categories...'}</option>
+                ) : (
+                  categoriesList.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))
+                )}
               </select>
             </div>
 
             {/* Keywords */}
             <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
-              <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+              <label
+                htmlFor="tags"
+                className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5"
+              >
                 <Tag className="h-4 w-4 text-primary" />
                 Keywords / Tags
               </label>
               <Input
+                id="tags"
                 value={tags}
                 onChange={(e) => setTags(e.target.value)}
                 placeholder="e.g. PostgreSQL, HNSW, AI, pgvector"
@@ -269,12 +320,17 @@ export default function NewArticlePage() {
 
           {/* 3. Attached Images */}
           <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
-            <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+            <label
+              htmlFor="imageUrl"
+              className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5"
+            >
               <ImageIcon className="h-4 w-4 text-primary" />
               Attached Images (Optional)
             </label>
             <div className="flex gap-2">
               <Input
+                id="imageUrl"
+                type="url"
                 value={imageUrl}
                 onChange={(e) => setImageUrl(e.target.value)}
                 onKeyDown={(e) => {
@@ -296,13 +352,21 @@ export default function NewArticlePage() {
             {images.length > 0 && (
               <div className="flex flex-wrap gap-3 mt-4 pt-4 border-t border-border">
                 {images.map((url, idx) => (
-                  <div key={idx} className="relative group rounded-xl overflow-hidden border border-border bg-muted/40 w-24 h-24">
+                  <div key={url} className="relative group rounded-xl overflow-hidden border border-border bg-muted/40 w-24 h-24">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={url} alt={`Attachment ${idx + 1}`} className="w-full h-full object-cover" />
+                    <img
+                      src={url}
+                      alt={`Attachment ${idx + 1}`}
+                      onError={(e) => {
+                        e.currentTarget.style.opacity = '0.25';
+                      }}
+                      className="w-full h-full object-cover"
+                    />
                     <button
                       type="button"
                       onClick={() => removeImage(idx)}
-                      className="absolute top-1 right-1 p-1 rounded-full bg-black/70 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                      aria-label={`Remove attachment ${idx + 1}`}
+                      className="absolute top-1 right-1 p-1.5 rounded-full bg-black/75 text-white opacity-90 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 transition-opacity"
                     >
                       <Trash2 className="h-3 w-3" />
                     </button>
@@ -314,8 +378,11 @@ export default function NewArticlePage() {
 
           {/* 4. Article Post (Content) */}
           <div className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <label
+                htmlFor="content"
+                className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5"
+              >
                 <FileText className="h-4 w-4 text-primary" />
                 Article Post * (Markdown Supported)
               </label>
@@ -327,6 +394,7 @@ export default function NewArticlePage() {
             </div>
 
             <Textarea
+              id="content"
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder="Write or paste your article content here in Markdown... Use ## headings, bullet points, and code blocks."
@@ -334,7 +402,7 @@ export default function NewArticlePage() {
               className="font-mono text-sm leading-relaxed p-4 bg-background resize-y"
             />
 
-            <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
+            <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 flex-wrap gap-2">
               <span>Supports Markdown headings, lists, quotes, and code blocks.</span>
               <span className="text-emerald-600 dark:text-emerald-400 font-medium">
                 Auto-indexed into the VeraLM AI Model
@@ -343,11 +411,11 @@ export default function NewArticlePage() {
           </div>
 
           {/* Bottom Action Bar */}
-          <div className="flex items-center justify-between p-4 rounded-2xl bg-muted/40 border border-border">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-muted/40 border border-border">
             <p className="text-xs text-muted-foreground">
               By publishing, you agree to license this content for VeraLM AI model inference and royalty attribution.
             </p>
-            <div className="flex gap-2 shrink-0">
+            <div className="flex gap-2 shrink-0 flex-wrap">
               <Button
                 variant="outline"
                 size="sm"

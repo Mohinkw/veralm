@@ -1,100 +1,111 @@
 import Link from 'next/link';
-import { Code, Cpu, LineChart, Stethoscope, Scale, Palette, Briefcase, GraduationCap, Search, ArrowRight, BookOpen, ShieldCheck } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import {
+  Code,
+  LineChart,
+  Stethoscope,
+  Plane,
+  Utensils,
+  Briefcase,
+  Atom,
+  GraduationCap,
+  Search,
+  ArrowRight,
+  BookOpen,
+} from 'lucide-react';
 import { Navbar } from '@/components/navbar';
 
 export const metadata = {
-  title: 'Browse Vault Knowledge Categories - VeraLM',
+  title: 'Browse Vault Knowledge Categories',
   description: 'Explore verified human knowledge categories licensed in the VeraLM private vault.',
 };
 
 const CATEGORIES = [
   {
-    name: 'Artificial Intelligence & ML',
-    slug: 'ai-ml',
-    icon: Cpu,
-    count: 38,
-    description: 'Deep learning architectures, LLM fine-tuning, RAG deployment, and agent frameworks.',
-    sampleQuestions: [
-      'How to build an agentic RAG pipeline with hybrid search?',
-      'Comparing LoRA vs full fine-tuning for domain adaptation',
-    ],
-  },
-  {
-    name: 'Software Engineering & Cloud',
-    slug: 'software-cloud',
+    name: 'Technology',
+    slug: 'technology',
     icon: Code,
-    count: 52,
-    description: 'Distributed systems, Kubernetes deployment patterns, database indexing, and Rust concurrency.',
+    description:
+      'Software engineering, distributed systems, AI/RAG architecture, pgvector optimization, and cloud infrastructure.',
     sampleQuestions: [
-      'PostgreSQL query planner optimization for vector search',
-      'Zero-downtime database migration strategies at scale',
+      'How to optimize PostgreSQL for vector search at scale with HNSW?',
+      'Explain the latest architectures in enterprise RAG and vector retrieval',
     ],
   },
   {
-    name: 'Finance & Quantitative Markets',
-    slug: 'finance-markets',
+    name: 'Personal Finance',
+    slug: 'personal-finance',
     icon: LineChart,
-    count: 24,
-    description: 'Algorithmic trading, macroeconomics, SaaS revenue attribution, and venture economics.',
+    description:
+      'Tax planning, portfolio strategy, quantitative investing, retirement compounding, and personal wealth management.',
+    sampleQuestions: [
+      'How do index expense ratios compound over 30 years?',
+      'Tax-advantaged retirement account strategies for freelancers',
+    ],
+  },
+  {
+    name: 'Health & Wellness',
+    slug: 'health-wellness',
+    icon: Stethoscope,
+    description:
+      'Evidence-based nutrition, sleep science, preventive medicine, clinical research synthesis, and longevity.',
+    sampleQuestions: [
+      'What does peer-reviewed evidence show about zone 2 aerobic training?',
+      'Clinical nutrition principles for metabolic health',
+    ],
+  },
+  {
+    name: 'Business',
+    slug: 'business',
+    icon: Briefcase,
+    description:
+      'SaaS metrics, B2B growth strategy, unit economics, founder playbooks, and corporate operations.',
     sampleQuestions: [
       'How do subscription cohorts correlate with net revenue retention?',
-      'Risk modeling techniques for multi-asset portfolios',
-    ],
-  },
-  {
-    name: 'Biomedicine & Health Tech',
-    slug: 'biomedicine',
-    icon: Stethoscope,
-    count: 19,
-    description: 'Clinical trial evaluation, genomics pipelines, bioinformatics, and healthcare AI compliance.',
-    sampleQuestions: [
-      'Interpreting single-cell RNA-seq clustering results',
-      'FDA guidance on clinical decision support software',
-    ],
-  },
-  {
-    name: 'Legal Tech & Regulatory Compliance',
-    slug: 'legal-tech',
-    icon: Scale,
-    count: 15,
-    description: 'AI copyright licensing, EU AI Act compliance, international data governance, and IP protection.',
-    sampleQuestions: [
-      'How does the EU AI Act classify GPAI model copyright liabilities?',
-      'Best practices for training data provenance and creator licensing',
-    ],
-  },
-  {
-    name: 'Product Design & UX Research',
-    slug: 'product-design',
-    icon: Palette,
-    count: 27,
-    description: 'Design systems, accessibility compliance, conversational UI paradigms, and user journey analytics.',
-    sampleQuestions: [
-      'Design heuristics for AI copilot streaming interfaces',
-      'Measuring mental model fidelity in generative interfaces',
-    ],
-  },
-  {
-    name: 'Entrepreneurship & Growth',
-    slug: 'growth-strategy',
-    icon: Briefcase,
-    count: 31,
-    description: 'Product-led growth, founder playbooks, pricing experiments, and technical recruiting.',
-    sampleQuestions: [
       'Transitioning from sales-led to product-led growth in B2B',
-      'Structuring early employee equity grants and 83(b) elections',
     ],
   },
   {
-    name: 'Applied Science & Research',
-    slug: 'applied-science',
-    icon: GraduationCap,
-    count: 21,
-    description: 'Quantum computing fundamentals, material sciences, renewable energy storage, and robotics.',
+    name: 'Science',
+    slug: 'science',
+    icon: Atom,
+    description:
+      'Physics, chemistry, biology, climate systems, materials science, and reproducible research insights.',
     sampleQuestions: [
       'Solid-state battery electrolyte degradation mechanisms',
-      'Quantum error correction threshold theorems explained',
+      'How CRISPR prime editing improves genomic precision',
+    ],
+  },
+  {
+    name: 'Education',
+    slug: 'education',
+    icon: GraduationCap,
+    description:
+      'Learning science, curriculum design, technical pedagogy, spaced repetition, and academic writing.',
+    sampleQuestions: [
+      'How effective is active recall vs passive rereading in STEM courses?',
+      'Designing practical project-based technical curricula',
+    ],
+  },
+  {
+    name: 'Travel',
+    slug: 'travel',
+    icon: Plane,
+    description:
+      'In-depth regional field guides, visa and logistics briefings, safety advisories, and transit planning.',
+    sampleQuestions: [
+      'Essential transit pass tips for two weeks across Japan',
+      'Digital nomad visa requirements in EU countries',
+    ],
+  },
+  {
+    name: 'Food & Cooking',
+    slug: 'food-cooking',
+    icon: Utensils,
+    description:
+      'Culinary food science, fermentation techniques, recipe engineering, and regional cooking traditions.',
+    sampleQuestions: [
+      'Science behind Maillard browning and pan temperature control',
+      'Traditional fermentation temperature and salinity ratios',
     ],
   },
 ];
@@ -106,7 +117,7 @@ export default function CategoriesPage() {
       <Navbar />
 
       {/* Hero */}
-      <section className="py-16 bg-muted/20 border-b border-border">
+      <section className="py-12 sm:py-16 bg-muted/20 border-b border-border">
         <div className="container mx-auto px-4 max-w-4xl text-center">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-semibold mb-4">
             <BookOpen className="h-3.5 w-3.5" />
@@ -122,43 +133,50 @@ export default function CategoriesPage() {
       </section>
 
       {/* Category Grid */}
-      <section className="py-16">
+      <section className="py-12 sm:py-16">
         <div className="container mx-auto px-4 max-w-6xl">
-          <div className="grid sm:grid-cols-2 lg:grid-cols-2 gap-6">
+          <div className="grid sm:grid-cols-2 gap-6">
             {CATEGORIES.map((category) => {
               const Icon = category.icon;
               return (
                 <div
                   key={category.slug}
-                  className="bg-card border border-border rounded-2xl p-6 shadow-sm hover:border-primary/50 transition-all flex flex-col justify-between"
+                  className="min-w-0 bg-card border border-border rounded-2xl p-5 sm:p-6 shadow-sm hover:border-primary/50 transition-all flex flex-col justify-between"
                 >
-                  <div>
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="p-3 rounded-xl bg-primary/10 text-primary">
+                  <div className="min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-4">
+                      <div className="p-3 rounded-xl bg-primary/10 text-primary shrink-0">
                         <Icon className="h-6 w-6" />
                       </div>
-                      <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
+                      <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground whitespace-nowrap">
                         Verified Knowledge
                       </span>
                     </div>
 
-                    <h2 className="text-xl font-bold mb-2">{category.name}</h2>
-                    <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
+                    <h2 className="text-xl font-bold mb-2">
+                      <Link
+                        href={`/categories/${category.slug}`}
+                        className="hover:text-primary transition-colors"
+                      >
+                        {category.name}
+                      </Link>
+                    </h2>
+                    <p className="text-sm text-muted-foreground mb-5 leading-relaxed">
                       {category.description}
                     </p>
 
-                    <div className="mb-6">
+                    <div className="mb-5 min-w-0">
                       <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
                         Common Vault Queries:
                       </div>
-                      <div className="space-y-1.5">
+                      <div className="space-y-2">
                         {category.sampleQuestions.map((q, i) => (
                           <Link
                             key={i}
-                            href={`/search?q=${encodeURIComponent(q)}`}
-                            className="block text-xs text-foreground/80 hover:text-primary transition-colors flex items-center gap-1.5 truncate"
+                            href={`/?category=${encodeURIComponent(category.slug)}&q=${encodeURIComponent(q)}`}
+                            className="flex items-center gap-2 py-1 text-xs text-foreground/80 hover:text-primary transition-colors min-w-0"
                           >
-                            <Search className="h-3 w-3 text-muted-foreground shrink-0" />
+                            <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                             <span className="truncate">{q}</span>
                           </Link>
                         ))}
@@ -166,17 +184,17 @@ export default function CategoriesPage() {
                     </div>
                   </div>
 
-                  <div className="pt-4 border-t border-border flex items-center justify-between">
+                  <div className="pt-4 border-t border-border flex flex-wrap items-center justify-between gap-2">
                     <Link
-                      href={`/search?category=${category.slug}`}
-                      className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
+                      href={`/categories/${category.slug}`}
+                      className="text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1 py-1"
                     >
-                      Search this category
+                      Browse {category.name} articles
                       <ArrowRight className="h-3.5 w-3.5" />
                     </Link>
                     <Link
-                      href="/creators/apply"
-                      className="text-xs text-muted-foreground hover:text-foreground"
+                      href="/creators/articles/new"
+                      className="text-xs text-muted-foreground hover:text-foreground py-1"
                     >
                       Write in this niche →
                     </Link>
@@ -189,7 +207,7 @@ export default function CategoriesPage() {
       </section>
 
       {/* Footer */}
-      <footer className="py-8 text-center text-xs text-muted-foreground border-t border-border">
+      <footer className="py-8 px-4 text-center text-xs text-muted-foreground border-t border-border">
         © 2026 VeraLM Inc. AI-Powered Exclusive Content Publishing & Knowledge Search Platform.
       </footer>
     </div>

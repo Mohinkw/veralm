@@ -1,9 +1,29 @@
 import type { Metadata, Viewport } from 'next';
+import { Inter, JetBrains_Mono, Noto_Sans_Bengali } from 'next/font/google';
 import Script from 'next/script';
 import '@/styles/globals.css';
 import { ThemeProvider } from '@/components/theme-provider';
 import { AccountProvider } from '@/lib/account-context';
-import { getSiteUrl } from '@/lib/utils';
+import { getSiteUrl, safeJsonLd } from '@/lib/utils';
+
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-sans',
+  display: 'swap',
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  variable: '--font-mono',
+  display: 'swap',
+});
+
+const notoBengali = Noto_Sans_Bengali({
+  subsets: ['bengali'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-bengali',
+  display: 'swap',
+});
 
 const siteUrl = getSiteUrl();
 
@@ -75,7 +95,6 @@ export const viewport: Viewport = {
   ],
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -114,14 +133,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const posthogHost = process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com';
 
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`${inter.variable} ${jetbrainsMono.variable} ${notoBengali.variable}`}
+    >
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link
-          rel="preconnect"
-          href="https://fonts.gstatic.com"
-          crossOrigin="anonymous"
-        />
         {adsenseClientId && (
           <>
             <meta name="google-adsense-account" content={adsenseClientId} />
@@ -134,7 +151,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         )}
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+          dangerouslySetInnerHTML={{ __html: safeJsonLd(jsonLd) }}
         />
       </head>
       <body className="font-sans antialiased">
@@ -155,13 +172,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               strategy="afterInteractive"
             />
             <Script id="ga4-init" strategy="afterInteractive">
-              {`window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', '${gaMeasurementId}', { page_path: window.location.pathname });`}
+              {`
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                gtag('js', new Date());
+                gtag('config', '${gaMeasurementId}');
+              `}
             </Script>
           </>
         )}
         {posthogKey && (
           <Script id="posthog-init" strategy="afterInteractive">
-            {`!function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.async=!0,p.src=s.api_host+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="capture identify alias people.set people.set_once set_config register register_once unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset isFeatureEnabled onFeatureFlags getFeatureFlag getFeatureFlagPayload reloadFeatureFlags group updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures getActiveMatchingSurveys getSurveys onSessionId".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);posthog.init('${posthogKey}',{api_host:'${posthogHost}',person_profiles:'identified_only'});`}
+            {`
+              !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset isFeatureEnabled getFeatureFlag getFeatureFlagPayload reloadFeatureFlags group identify setPersonProperties setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags resetGroups onFeatureFlags addFeatureFlagsHandler onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+              posthog.init('${posthogKey}', { api_host: '${posthogHost}', person_profiles: 'identified_only' });
+            `}
           </Script>
         )}
       </body>

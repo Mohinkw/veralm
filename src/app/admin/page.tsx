@@ -1,7 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { useAccount } from '@/lib/account-context';
 import { Button } from '@/components/ui/button';
 import { AdminHeader } from '@/components/admin-header';
 
@@ -9,6 +11,7 @@ type Article = { id: string; version: number; title: string; content: string; au
 type Stats = { total_articles: number; pending_review: number; approved: number; rejected: number };
 
 export default function AdminDashboard() {
+  const { user, isLoading: authLoading } = useAccount();
   const [queue, setQueue] = useState<Article[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +40,11 @@ export default function AdminDashboard() {
       setError(err instanceof Error ? err.message : 'Unable to load review queue.');
     } finally { setLoading(false); }
   }, [request]);
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    if (!authLoading) {
+      void refresh();
+    }
+  }, [authLoading, user.id, refresh]);
 
   const act = async (articleId: string, version: number, action: 'approve' | 'reject' | 'request_revision') => {
     if (action !== 'approve' && !feedback.trim()) { setError('Enter feedback before rejecting or requesting a revision.'); return; }
@@ -62,7 +69,12 @@ export default function AdminDashboard() {
       <h2 className="font-semibold text-xl">{article.title}</h2>
       <p className="text-sm text-muted-foreground">{article.author_name} · {article.category_name || 'Uncategorized'} · {article.word_count ?? 'Unknown'} words · {new Date(article.submitted_at).toLocaleDateString()}</p>
       <p className="text-sm text-muted-foreground">Automated verification unavailable; human review required.</p>
-      <Button variant="outline" onClick={() => { setSelected(selected === article.id ? null : article.id); setFeedback(''); }}> {selected === article.id ? 'Close' : 'Review article'} </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" onClick={() => { setSelected(selected === article.id ? null : article.id); setFeedback(''); }}> {selected === article.id ? 'Close' : 'Review article'} </Button>
+        <Link href={`/admin/articles/${article.id}`}>
+          <Button variant="ghost">Full review view</Button>
+        </Link>
+      </div>
       {selected === article.id && <div className="space-y-4">
         <div className="whitespace-pre-wrap break-words border rounded p-4 max-h-96 overflow-auto">{article.content}</div>
         <label className="block">Feedback for the author (required for rejection or revision)

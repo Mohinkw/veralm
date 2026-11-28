@@ -7,7 +7,7 @@ import { VeraLMLogo } from '@/components/veralm-logo';
 import { useAccount } from '@/lib/account-context';
 
 interface CreatorHeaderProps {
-  activeTab: 'overview' | 'articles' | 'earnings' | 'analytics';
+  activeTab: 'overview' | 'articles' | 'earnings' | 'analytics' | 'profile';
   rightSlot?: React.ReactNode;
 }
 
@@ -70,6 +70,7 @@ export function CreatorHeader({ activeTab, rightSlot }: CreatorHeaderProps) {
             href="/creators/profile"
             className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold hover:ring-2 hover:ring-primary transition-all shrink-0"
             title={`${displayName} - Profile Settings`}
+            aria-label={`${displayName} - Profile Settings`}
           >
             {initial}
           </Link>

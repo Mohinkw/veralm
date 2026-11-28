@@ -16,6 +16,7 @@ export function ArticleRating({ articleId, platformRatingOutOf10 }: ArticleRatin
   const [userRating, setUserRating] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -45,6 +46,7 @@ export function ArticleRating({ articleId, platformRatingOutOf10 }: ArticleRatin
   const submitRating = async (score: number) => {
     setSaving(true);
     setSavedMsg(null);
+    setErrorMsg(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -62,9 +64,12 @@ export function ArticleRating({ articleId, platformRatingOutOf10 }: ArticleRatin
         setTotalRatings(Number(data.totalRatings || 0));
         setUserRating(data.userRating ?? score);
         setSavedMsg(`You rated this article ${score}/10`);
+      } else {
+        const body = await res.json().catch(() => null);
+        setErrorMsg(body?.error || 'Could not save rating.');
       }
     } catch {
-      // ignore
+      setErrorMsg('Network error saving rating.');
     } finally {
       setSaving(false);
     }
@@ -123,6 +128,9 @@ export function ArticleRating({ articleId, platformRatingOutOf10 }: ArticleRatin
 
       {savedMsg && (
         <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400">{savedMsg}</p>
+      )}
+      {errorMsg && (
+        <p role="alert" className="text-xs font-medium text-destructive">{errorMsg}</p>
       )}
     </div>
   );

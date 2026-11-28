@@ -14,8 +14,8 @@ import { db } from '@/db/client';
 import { articles, categories, creatorProfiles } from '@/db/schema';
 import { Button } from '@/components/ui/button';
 import { AdSlot } from '@/components/ad-slot';
-import { VeraLMLogo } from '@/components/veralm-logo';
-import { getSiteUrl } from '@/lib/utils';
+import { Navbar } from '@/components/navbar';
+import { getSiteUrl, safeJsonLd } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -127,41 +127,29 @@ export default async function CategoryHubPage({ params }: Props) {
     <div className="min-h-screen bg-background">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(collectionJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(collectionJsonLd) }}
       />
 
-      <header className="border-b border-border sticky top-0 z-50 bg-background/95 backdrop-blur">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 font-bold text-xl">
-            <VeraLMLogo className="h-6 w-6" />
-            <span>VeraLM</span>
-          </Link>
-          <div className="flex items-center gap-3">
-            <Link href="/categories">
-              <Button variant="ghost" size="sm" className="text-xs">
-                All Categories
-              </Button>
-            </Link>
-            <Link href={`/?q=${encodeURIComponent(category.name)}`}>
-              <Button size="sm" className="gap-1.5 text-xs">
-                <Sparkles className="h-3.5 w-3.5" />
-                Ask VeraLM
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </header>
+      <Navbar />
 
       <main className="py-10 px-4">
         <div className="container mx-auto max-w-5xl space-y-8">
           <div className="space-y-3">
-            <Link
-              href="/categories"
-              className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              Back to Categories
-            </Link>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <Link
+                href="/categories"
+                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground py-1"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Back to Categories
+              </Link>
+              <Link href={`/?category=${encodeURIComponent(category.slug)}&q=${encodeURIComponent(category.name)}`}>
+                <Button size="sm" className="gap-1.5 text-xs">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Ask AI about {category.name}
+                </Button>
+              </Link>
+            </div>
             <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">{category.name}</h1>
             <p className="text-muted-foreground max-w-2xl">
               {category.description ||
@@ -221,10 +209,10 @@ export default async function CategoryHubPage({ params }: Props) {
                       )}
                     </div>
 
-                    <div className="flex items-center justify-between pt-3 border-t border-border/60 text-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-border/60 text-xs">
                       <Link
                         href={`/creators/${art.authorSlug}`}
-                        className="font-medium text-primary hover:underline"
+                        className="font-medium text-primary hover:underline py-1"
                       >
                         {art.authorName}
                       </Link>
@@ -234,8 +222,14 @@ export default async function CategoryHubPage({ params }: Props) {
                           {art.totalQueryContributions}
                         </span>
                         <Link
+                          href={`/articles/${art.slug}`}
+                          className="font-semibold text-foreground hover:text-primary py-1"
+                        >
+                          Read →
+                        </Link>
+                        <Link
                           href={`/?q=${encodeURIComponent(art.title)}`}
-                          className="font-semibold text-foreground hover:text-primary"
+                          className="font-semibold text-foreground hover:text-primary py-1"
                         >
                           Ask AI →
                         </Link>

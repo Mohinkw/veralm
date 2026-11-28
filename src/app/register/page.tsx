@@ -31,31 +31,29 @@ export default function RegisterPage() {
       setMode('user');
 
       const { data, error: signUpError } = await supabase.auth.signUp({
-        email,
+        email: email.trim(),
         password,
         options: {
           data: {
-            full_name: name,
+            full_name: name.trim(),
             role: 'user',
           },
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=/`,
         },
       });
 
       if (signUpError) {
         setError(signUpError.message);
-        setIsLoading(false);
         return;
       }
 
       if (data?.session) {
         router.push('/');
       } else {
-        setSuccessMessage('Account created! Check your email to confirm, or sign in.');
-        setTimeout(() => router.push('/'), 2000);
+        setSuccessMessage('Account created! Please check your email inbox to confirm your address before signing in.');
       }
-    } catch (err: any) {
-      setError(err?.message || 'Failed to create account. Please try again.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create account. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -63,6 +61,7 @@ export default function RegisterPage() {
 
   const handleGoogleSignUp = async () => {
     setError(null);
+    setIsLoading(true);
     try {
       setMode('user');
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
@@ -71,44 +70,32 @@ export default function RegisterPage() {
           redirectTo: `${window.location.origin}/auth/callback?next=/`,
         },
       });
-      if (oauthError) setError(oauthError.message);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to initialize Google sign-in.');
-    }
-  };
-
-  const handleAppleSignUp = async () => {
-    setError(null);
-    try {
-      setMode('user');
-      const { error: oauthError } = await supabase.auth.signInWithOAuth({
-        provider: 'apple',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback?next=/`,
-        },
-      });
-      if (oauthError) setError(oauthError.message);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to initialize Apple sign-in.');
+      if (oauthError) {
+        setError(oauthError.message);
+        setIsLoading(false);
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to initialize Google sign-in.');
+      setIsLoading(false);
     }
   };
 
   return (
     <div className="min-h-screen bg-background flex flex-col justify-between">
       {/* Header */}
-      <header className="border-b border-border py-4 px-6 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 font-bold text-xl">
+      <header className="border-b border-border py-4 px-4 sm:px-6 flex items-center justify-between gap-2">
+        <Link href="/" className="flex items-center gap-2 font-bold text-lg sm:text-xl shrink-0">
           <VeraLMLogo className="h-6 w-6" />
           <span>VeraLM</span>
         </Link>
-        <Link href="/login" className="text-sm font-medium text-muted-foreground hover:text-foreground">
-          Already have an account? <span className="text-primary font-semibold">Sign In</span>
+        <Link href="/login" className="text-xs sm:text-sm font-medium text-muted-foreground hover:text-foreground text-right">
+          Have an account? <span className="text-primary font-semibold">Sign In</span>
         </Link>
       </header>
 
       {/* Main Container */}
-      <main className="flex-1 flex items-center justify-center p-6">
-        <div className="w-full max-w-md bg-card border border-border rounded-2xl p-8 shadow-sm">
+      <main className="flex-1 flex items-center justify-center p-4 sm:p-6">
+        <div className="w-full max-w-md bg-card border border-border rounded-2xl p-6 sm:p-8 shadow-sm">
           <div className="text-center mb-6">
             <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl mb-3">
               <VeraLMLogo className="h-10 w-10 rounded-xl" size={40} />
@@ -119,13 +106,13 @@ export default function RegisterPage() {
             </p>
           </div>
 
-          {/* Google Sign-in */}
           <button
             type="button"
+            disabled={isLoading}
             onClick={handleGoogleSignUp}
-            className="w-full mb-5 py-2.5 px-4 rounded-xl border border-border bg-background hover:bg-accent flex items-center justify-center gap-3 text-sm font-medium transition-colors"
+            className="w-full mb-5 py-2.5 px-4 rounded-xl border border-border bg-background hover:bg-accent disabled:opacity-50 flex items-center justify-center gap-3 text-sm font-medium transition-colors"
           >
-            <svg className="h-4 w-4" viewBox="0 0 24 24">
+            <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
               <path
                 fill="#4285F4"
                 d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -171,10 +158,13 @@ export default function RegisterPage() {
 
           <form onSubmit={handleSubmit} className="space-y-3.5">
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-foreground">Full Name</label>
+              <label htmlFor="reg-name" className="text-xs font-semibold text-foreground">
+                Full Name
+              </label>
               <div className="relative">
                 <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
+                  id="reg-name"
                   type="text"
                   required
                   placeholder="Your Name"
@@ -186,10 +176,13 @@ export default function RegisterPage() {
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-foreground">Email Address</label>
+              <label htmlFor="reg-email" className="text-xs font-semibold text-foreground">
+                Email Address
+              </label>
               <div className="relative">
                 <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
+                  id="reg-email"
                   type="email"
                   required
                   placeholder="you@example.com"
@@ -201,13 +194,17 @@ export default function RegisterPage() {
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-foreground">Password</label>
+              <label htmlFor="reg-password" className="text-xs font-semibold text-foreground">
+                Password
+              </label>
               <div className="relative">
                 <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
+                  id="reg-password"
                   type="password"
                   required
-                  placeholder="••••••••"
+                  minLength={6}
+                  placeholder="Create a password (min 6 chars)"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="pl-9 h-9 text-sm"
@@ -216,21 +213,27 @@ export default function RegisterPage() {
             </div>
 
             <Button type="submit" disabled={isLoading} className="w-full mt-2">
-              {isLoading ? 'Creating Account...' : 'Create Account'}
+              {isLoading ? 'Creating Account...' : 'Create Free Account'}
               <ArrowRight className="h-4 w-4 ml-2" />
             </Button>
           </form>
 
-          <p className="text-center text-xs text-muted-foreground mt-4">
-            By signing up, you agree to VeraLM's{' '}
-            <Link href="/terms" className="text-primary hover:underline">Terms</Link> &{' '}
-            <Link href="/privacy" className="text-primary hover:underline">Privacy</Link>.
+          <p className="text-[11px] text-center text-muted-foreground mt-4">
+            By signing up, you agree to our{' '}
+            <Link href="/terms" className="text-primary hover:underline">
+              Terms
+            </Link>{' '}
+            and{' '}
+            <Link href="/privacy" className="text-primary hover:underline">
+              Privacy Policy
+            </Link>
+            .
           </p>
         </div>
       </main>
 
-      <footer className="py-4 text-center text-xs text-muted-foreground border-t border-border">
-        © 2026 VeraLM Inc. Grounded AI Chatbot. All rights reserved.
+      <footer className="py-4 px-4 text-center text-xs text-muted-foreground border-t border-border">
+        © 2026 VeraLM Inc. One account for users and creators.
       </footer>
     </div>
   );

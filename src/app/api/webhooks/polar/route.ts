@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { eq } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { users } from '@/db/schema';
+import { isValidUuid } from '@/lib/auth/request';
 import { verifyPolarWebhookSignature } from '@/lib/polar-webhook';
 
 type PolarObj = Record<string, unknown>;
@@ -26,7 +27,19 @@ async function setProTier(opts: {
   proExpiresAt: Date | null;
 }) {
   const now = new Date();
-  if (opts.userId) {
+  if (opts.userId && isValidUuid(opts.userId)) {
+    if (opts.tier === 'free') {
+      await db
+        .update(users)
+        .set({
+          subscriptionTier: 'free',
+          proExpiresAt: opts.proExpiresAt,
+          updatedAt: now,
+        })
+        .where(eq(users.id, opts.userId));
+      return;
+    }
+
     await db
       .insert(users)
       .values({
@@ -42,7 +55,7 @@ async function setProTier(opts: {
         target: users.id,
         set: {
           subscriptionTier: opts.tier,
-          proExpiresAt: opts.proExpiresAt,
+          ...(opts.proExpiresAt ? { proExpiresAt: opts.proExpiresAt } : {}),
           updatedAt: now,
         },
       });
@@ -127,9 +140,20 @@ export async function POST(request: NextRequest) {
             userId,
             email,
             tier: 'pro',
-            proExpiresAt: periodEnd && !Number.isNaN(periodEnd.getTime()) ? periodEnd : null,
+            proExpiresAt:
+              periodEnd && !Number.isNaN(periodEnd.getTime())
+                ? periodEnd
+                : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
           });
-        } else if (status === 'canceled' || status === 'revoked' || status === 'unpaid') {
+        } else if (status === 'canceled') {
+          const stillActive = periodEnd && !Number.isNaN(periodEnd.getTime()) && periodEnd.getTime() > Date.now();
+          await setProTier({
+            userId,
+            email,
+            tier: stillActive ? 'pro' : 'free',
+            proExpiresAt: stillActive ? periodEnd : null,
+          });
+        } else if (status === 'revoked' || status === 'unpaid') {
           await setProTier({ userId, email, tier: 'free', proExpiresAt: null });
         }
         break;

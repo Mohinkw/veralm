@@ -33,8 +33,10 @@ export function CreatorFab() {
 
       {/* FAB button */}
       <button
+        type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-label="Creator options"
+        aria-expanded={expanded}
         className={`group flex items-center gap-2 rounded-full px-4 py-3 font-semibold text-sm shadow-xl transition-all duration-200 ${
           expanded
             ? 'bg-muted text-foreground border border-border'

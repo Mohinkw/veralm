@@ -18,21 +18,25 @@ export function CreatorTaxForm() {
 
   useEffect(() => {
     async function load() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-      const res = await fetch('/api/creators/tax-info', {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-        cache: 'no-store',
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setHasTaxInfo(Boolean(data.hasTaxInfo));
-        if (data.taxCountry) setTaxCountry(data.taxCountry);
-        if (data.taxFormType) setTaxFormType(data.taxFormType);
-        if (data.taxIdMasked) setTaxIdMasked(data.taxIdMasked);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+        const res = await fetch('/api/creators/tax-info', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          cache: 'no-store',
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setHasTaxInfo(Boolean(data.hasTaxInfo));
+          if (data.taxCountry) setTaxCountry(data.taxCountry);
+          if (data.taxFormType) setTaxFormType(data.taxFormType);
+          if (data.taxIdMasked) setTaxIdMasked(data.taxIdMasked);
+        }
+      } catch {
+        // ignore background fetch errors on mount
       }
     }
-    load();
+    void load();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -89,8 +93,9 @@ export function CreatorTaxForm() {
 
       <form onSubmit={handleSubmit} className="grid sm:grid-cols-4 gap-3 items-end">
         <div>
-          <label className="text-xs font-medium text-muted-foreground block mb-1">Form Type</label>
+          <label htmlFor="tax-form-type" className="text-xs font-medium text-muted-foreground block mb-1">Form Type</label>
           <select
+            id="tax-form-type"
             value={taxFormType}
             onChange={(e) => setTaxFormType(e.target.value as 'w9' | 'w8ben')}
             className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
@@ -100,8 +105,9 @@ export function CreatorTaxForm() {
           </select>
         </div>
         <div>
-          <label className="text-xs font-medium text-muted-foreground block mb-1">Tax Country</label>
+          <label htmlFor="tax-country" className="text-xs font-medium text-muted-foreground block mb-1">Tax Country</label>
           <Input
+            id="tax-country"
             required
             value={taxCountry}
             onChange={(e) => setTaxCountry(e.target.value)}
@@ -109,10 +115,11 @@ export function CreatorTaxForm() {
           />
         </div>
         <div>
-          <label className="text-xs font-medium text-muted-foreground block mb-1">
+          <label htmlFor="tax-id" className="text-xs font-medium text-muted-foreground block mb-1">
             {taxFormType === 'w9' ? 'SSN / EIN' : 'Foreign Tax ID'}
           </label>
           <Input
+            id="tax-id"
             required
             type="password"
             value={taxId}

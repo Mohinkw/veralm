@@ -7,20 +7,25 @@ const MAX_IN_MEMORY_KEYS = 5000;
 const requestLog = new Map<string, number[]>();
 
 /**
- * Derive a rate-limit key from the caller's IP address (and optional session ID)
- * so rotating client-supplied session_id values cannot bypass limits.
+ * Extracts best-effort client IP from trusted proxy headers.
+ */
+export function extractClientIp(request: NextRequest): string {
+  const vercelIp = request.headers.get('x-vercel-forwarded-for')?.split(',').pop()?.trim();
+  const realIp = request.headers.get('x-real-ip')?.trim();
+  const forwardedFor = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
+  return vercelIp || realIp || forwardedFor || 'unknown-ip';
+}
+
+/**
+ * Derive a rate-limit key from the caller's IP address (and optional session ID).
  */
 export function getRateLimitKey(request: NextRequest, sessionId?: string): string {
-  const forwardedFor = request.headers.get('x-forwarded-for');
-  const ip =
-    forwardedFor?.split(',')[0]?.trim() ||
-    request.headers.get('x-real-ip')?.trim() ||
-    'unknown-ip';
+  const ip = extractClientIp(request);
   return sessionId ? `${ip}:${sessionId}` : ip;
 }
 
 /**
- * Prune expired timestamps and cap total tracked keys to prevent unbounded memory growth.
+ * Prune expired timestamps and evict oldest entries without wiping active buckets.
  */
 function checkInMemoryRateLimit(
   key: string,
@@ -35,7 +40,12 @@ function checkInMemoryRateLimit(
       else requestLog.set(k, valid);
     }
     if (requestLog.size > MAX_IN_MEMORY_KEYS) {
-      requestLog.clear();
+      const evictCount = Math.ceil(requestLog.size * 0.25);
+      let removed = 0;
+      for (const k of requestLog.keys()) {
+        requestLog.delete(k);
+        if (++removed >= evictCount) break;
+      }
     }
   }
 
@@ -54,14 +64,18 @@ function checkInMemoryRateLimit(
  * Distributed fixed-window rate limit via Upstash Redis REST API when configured;
  * automatically falls back to bounded in-memory rate limiting in local/dev environments.
  */
-export async function isRateLimited(key: string): Promise<boolean> {
+export async function isRateLimited(
+  key: string,
+  maxRequests = MAX_REQUESTS_PER_WINDOW
+): Promise<boolean> {
   const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
   const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+  const safeKey = key.replace(/[^a-zA-Z0-9:._-]/g, '_').slice(0, 128);
 
   if (redisUrl && redisToken) {
     try {
       const windowBucket = Math.floor(Date.now() / RATE_LIMIT_WINDOW_MS);
-      const redisKey = `rl:search:${key}:${windowBucket}`;
+      const redisKey = `rl:search:${safeKey}:${windowBucket}`;
       const res = await fetch(`${redisUrl}/pipeline`, {
         method: 'POST',
         headers: {
@@ -78,7 +92,7 @@ export async function isRateLimited(key: string): Promise<boolean> {
         const data = (await res.json()) as Array<{ result?: number }>;
         const count = data?.[0]?.result;
         if (typeof count === 'number') {
-          return count > MAX_REQUESTS_PER_WINDOW;
+          return count > maxRequests;
         }
       }
     } catch (err) {
@@ -86,7 +100,7 @@ export async function isRateLimited(key: string): Promise<boolean> {
     }
   }
 
-  return checkInMemoryRateLimit(key);
+  return checkInMemoryRateLimit(key, Date.now(), RATE_LIMIT_WINDOW_MS, maxRequests);
 }
 
 export function resetInMemoryRateLimitForTests(): void {

@@ -258,8 +258,9 @@ export default function CreatorApplyPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-2">Primary Category *</label>
+                  <label htmlFor="primaryCategory" className="block text-sm font-medium mb-2">Primary Category *</label>
                   <select
+                    id="primaryCategory"
                     value={formData.primaryCategory}
                     onChange={(e) => handleChange('primaryCategory', e.target.value)}
                     className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -375,29 +376,29 @@ export default function CreatorApplyPage() {
                 <div className="bg-muted/50 p-6 rounded-lg">
                   <h3 className="font-semibold mb-4">Key Terms Summary</h3>
                   <dl className="space-y-3 text-sm">
-                    <div className="flex justify-between">
+                    <div className="flex flex-wrap justify-between gap-2">
                       <dt className="text-muted-foreground">Rights Granted</dt>
                       <dd className="font-medium">Exclusive AI search retrieval only</dd>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex flex-wrap justify-between gap-2">
                       <dt className="text-muted-foreground">You Retain</dt>
                       <dd className="font-medium">All publication, syndication, adaptation rights</dd>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex flex-wrap justify-between gap-2">
                       <dt className="text-muted-foreground">Duration</dt>
                       <dd className="font-medium">6-24 months per article, renewable</dd>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex flex-wrap justify-between gap-2">
                       <dt className="text-muted-foreground">Withdrawal</dt>
                       <dd className="font-medium">30 days notice, earned revenue paid</dd>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex flex-wrap justify-between gap-2">
                       <dt className="text-muted-foreground">Royalty Share</dt>
                       <dd className="font-medium">Up to 90% net revenue (after AI/server costs)</dd>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex flex-wrap justify-between gap-2">
                       <dt className="text-muted-foreground">Minimum Payout</dt>
-                      <dd className="font-medium">$50 via Stripe Connect (global)</dd>
+                      <dd className="font-medium">$50 via payout method (global)</dd>
                     </div>
                   </dl>
                 </div>

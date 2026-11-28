@@ -19,6 +19,7 @@ interface AccountContextType {
   setMode: (mode: AccountMode) => void;
   toggleMode: () => void;
   user: UserProfile;
+  isLoading: boolean;
   refreshProStatus: () => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -27,11 +28,13 @@ const AccountContext = createContext<AccountContextType | undefined>(undefined);
 
 export function AccountProvider({ children }: { children: React.ReactNode }) {
   const [mode, setModeState] = useState<AccountMode>('user');
+  const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState<UserProfile>({
     name: 'VeraLM User',
     email: 'user@veralm.com',
     isLoggedIn: false,
     isPro: false,
+    isAdmin: false,
   });
 
   const refreshProStatus = async () => {
@@ -56,7 +59,6 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    // Load persisted mode, default to 'user'
     const stored = localStorage.getItem('veralm_account_mode');
     if (stored === 'creator' || stored === 'user') {
       setModeState(stored);
@@ -64,39 +66,53 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
       setModeState('user');
     }
 
-    // Check supabase auth state
-    supabase.auth.getSession().then(({ data }) => {
-      const session = data?.session;
-      if (session?.user) {
-        setUser({
-          id: session.user.id,
-          email: session.user.email || 'user@veralm.com',
-          name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'VeraLM User',
-          isLoggedIn: true,
-          isPro: false,
-        });
-        refreshProStatus();
-      }
-    });
+    supabase.auth
+      .getSession()
+      .then(async ({ data }) => {
+        const session = data?.session;
+        if (session?.user) {
+          setUser({
+            id: session.user.id,
+            email: session.user.email || 'user@veralm.com',
+            name:
+              session.user.user_metadata?.full_name ||
+              session.user.email?.split('@')[0] ||
+              'VeraLM User',
+            isLoggedIn: true,
+            isPro: false,
+            isAdmin: false,
+          });
+          await refreshProStatus();
+        }
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
 
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setUser({
           id: session.user.id,
           email: session.user.email || 'user@veralm.com',
-          name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'VeraLM User',
+          name:
+            session.user.user_metadata?.full_name ||
+            session.user.email?.split('@')[0] ||
+            'VeraLM User',
           isLoggedIn: true,
           isPro: false,
+          isAdmin: false,
         });
-        refreshProStatus();
+        void refreshProStatus();
       } else {
         setUser({
           name: 'VeraLM User',
           email: 'user@veralm.com',
           isLoggedIn: false,
           isPro: false,
+          isAdmin: false,
         });
       }
+      setIsLoading(false);
     });
 
     return () => {
@@ -115,18 +131,29 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
+    try {
+      await fetch('/api/pro/status', { method: 'DELETE' });
+    } catch {
+      // ignore cookie cleanup network errors
+    }
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(`veralm_chats_${user.id || 'guest'}`);
+    }
     await supabase.auth.signOut();
     setUser({
       name: 'VeraLM User',
       email: 'user@veralm.com',
       isLoggedIn: false,
       isPro: false,
+      isAdmin: false,
     });
     setMode('user');
   };
 
   return (
-    <AccountContext.Provider value={{ mode, setMode, toggleMode, user, refreshProStatus, logout }}>
+    <AccountContext.Provider
+      value={{ mode, setMode, toggleMode, user, isLoading, refreshProStatus, logout }}
+    >
       {children}
     </AccountContext.Provider>
   );

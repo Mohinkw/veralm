@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import {
-  ArrowLeft,
   Award,
   BookOpen,
   Calendar,
@@ -17,8 +16,8 @@ import { db } from '@/db/client';
 import { articles, categories, creatorProfiles } from '@/db/schema';
 import { Button } from '@/components/ui/button';
 import { AdSlot } from '@/components/ad-slot';
-import { VeraLMLogo } from '@/components/veralm-logo';
-import { getSiteUrl } from '@/lib/utils';
+import { Navbar } from '@/components/navbar';
+import { getSiteUrl, safeJsonLd, sanitizeHttpUrl } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -120,29 +119,16 @@ export default async function PublicCreatorProfilePage({ params }: Props) {
     },
   };
 
+  const safeWebsiteUrl = sanitizeHttpUrl(creator.websiteUrl);
+
   return (
     <div className="min-h-screen bg-background">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(personJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(personJsonLd) }}
       />
 
-      <header className="border-b border-border sticky top-0 z-50 bg-background/95 backdrop-blur">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 font-bold text-xl">
-            <VeraLMLogo className="h-6 w-6" />
-            <span>VeraLM</span>
-          </Link>
-          <div className="flex items-center gap-3">
-            <Link href="/">
-              <Button size="sm" variant="outline" className="gap-1.5 text-xs">
-                <ArrowLeft className="h-4 w-4" />
-                Ask VeraLM
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </header>
+      <Navbar />
 
       <main className="py-10 px-4">
         <div className="container mx-auto max-w-4xl space-y-8">
@@ -176,9 +162,9 @@ export default async function PublicCreatorProfilePage({ params }: Props) {
                       <span>{creator.yearsOfExperience}+ years experience</span>
                     )}
                     {creator.country && <span>{creator.country}</span>}
-                    {creator.websiteUrl && (
+                    {safeWebsiteUrl && (
                       <a
-                        href={creator.websiteUrl}
+                        href={safeWebsiteUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 text-primary hover:underline"

@@ -39,16 +39,23 @@ type Article = {
 };
 
 export default function CreatorDashboardPage() {
-  const { user, toggleMode } = useAccount();
+  const { user, isLoading: authLoading } = useAccount();
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
+    if (authLoading) return;
+    let cancelled = false;
     async function loadArticles() {
+      setLoading(true);
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
-          setLoading(false);
+          if (!cancelled) {
+            setArticles([]);
+            setLoading(false);
+          }
           return;
         }
 
@@ -58,25 +65,34 @@ export default function CreatorDashboardPage() {
         });
         if (response.ok) {
           const data = await response.json();
-          setArticles(data.articles || []);
+          if (!cancelled) {
+            setArticles(data.articles || []);
+            setError('');
+          }
+        } else if (!cancelled) {
+          const data = await response.json().catch(() => null);
+          setError(data?.error || 'Could not load dashboard metrics.');
         }
       } catch {
-        // ignore
+        if (!cancelled) setError('Network error loading dashboard.');
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
 
-    loadArticles();
-  }, []);
+    void loadArticles();
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, user.id]);
 
   const approvedArticles = articles.filter(a => a.status === 'approved');
   const pendingArticles = articles.filter(a => a.status === 'under_ai_review' || a.status === 'pending_review');
+  const citedArticles = articles.filter(a => (a.total_query_contributions || 0) > 0);
   const totalCitations = articles.reduce((sum, a) => sum + (a.total_query_contributions || 0), 0);
   const totalEarnings = articles.reduce((sum, a) => sum + (Number(a.total_earnings_attributed) || 0), 0);
 
   const displayName = user.name || user.email?.split('@')[0] || 'Creator';
-  const initial = displayName.charAt(0).toUpperCase();
 
   return (
     <div className="min-h-screen bg-background">
@@ -98,7 +114,7 @@ export default function CreatorDashboardPage() {
                 Track your verified knowledge articles, citation royalties, and monthly payout pool share.
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-600 text-xs font-semibold">
                 <CheckCircle2 className="h-3.5 w-3.5" />
                 Universal Account Active
@@ -108,6 +124,23 @@ export default function CreatorDashboardPage() {
               </span>
             </div>
           </div>
+
+          {!authLoading && !user.isLoggedIn && (
+            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 text-sm flex flex-wrap items-center justify-between gap-3">
+              <span>Sign in to submit articles, track live citations, and manage creator payouts.</span>
+              <Link href="/login">
+                <Button size="sm" variant="outline" className="gap-1.5">
+                  <LogIn className="h-3.5 w-3.5" />
+                  Sign In
+                </Button>
+              </Link>
+            </div>
+          )}
+          {error && (
+            <div role="alert" className="p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+              {error}
+            </div>
+          )}
 
           {!user.isLoggedIn && (
             <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 text-sm flex items-center justify-between gap-3">
@@ -191,19 +224,23 @@ export default function CreatorDashboardPage() {
                 </Link>
               </div>
 
-              {articles.length === 0 ? (
+              {loading ? (
+                <div className="p-8 rounded-xl border border-border text-center bg-card/50 text-xs text-muted-foreground">
+                  Loading attribution events...
+                </div>
+              ) : citedArticles.length === 0 ? (
                 <div className="p-8 rounded-xl border border-dashed border-border text-center bg-card/50 space-y-3">
                   <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto">
                     <TrendingUp className="h-6 w-6" />
                   </div>
                   <h3 className="font-semibold text-base">No citation attribution events yet</h3>
                   <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                    Once you submit articles to the VeraLM knowledge vault, every time user search queries match and cite your verified insights, you will see real-time attribution and royalty payouts right here.
+                    Once your articles are approved in the VeraLM knowledge vault, every time user search queries match and cite your verified insights, you will see real-time attribution and royalty payouts right here.
                   </p>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {articles.filter(a => (a.total_query_contributions || 0) > 0).map((art) => (
+                  {citedArticles.map((art) => (
                     <div key={art.id} className="p-4 rounded-xl border border-border bg-card shadow-sm hover:border-primary/40 transition-all">
                       <div className="flex items-start justify-between gap-3">
                         <div className="space-y-1">

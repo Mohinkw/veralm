@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { desc, eq, sql } from 'drizzle-orm';
 import { db } from '@/db/client';
-import { auditLog, creatorPayoutMethods, creatorProfiles, users } from '@/db/schema';
+import { auditLog, creatorProfiles, users } from '@/db/schema';
 import { requireAdmin } from '@/lib/admin/auth';
+import { isValidUuid, parseJsonObject } from '@/lib/auth/request';
 
 export async function GET(request: NextRequest) {
-  const auth = await requireAdmin(request);
-  if (auth.error) return auth.error;
-
   try {
+    const auth = await requireAdmin(request);
+    if (auth.error) return auth.error;
+
     const rows = await db
       .select({
         id: creatorProfiles.id,
@@ -44,40 +45,58 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const auth = await requireAdmin(request);
-  if (auth.error) return auth.error;
-
   try {
-    const body = await request.json().catch(() => ({}));
-    const creatorId = typeof body.creatorId === 'string' ? body.creatorId.trim() : '';
+    const auth = await requireAdmin(request);
+    if (auth.error) return auth.error;
+
+    const parsed = await parseJsonObject(request);
+    if ('error' in parsed) return parsed.error;
+    const body = parsed.data;
+
+    const creatorId = body.creatorId;
     const isActive = typeof body.isActive === 'boolean' ? body.isActive : null;
 
-    if (!creatorId || isActive === null) {
-      return NextResponse.json({ error: 'creatorId and isActive are required.' }, { status: 400 });
+    if (!isValidUuid(creatorId) || isActive === null) {
+      return NextResponse.json({ error: 'Valid creatorId UUID and isActive boolean are required.' }, { status: 400 });
     }
 
-    const [updated] = await db
-      .update(creatorProfiles)
-      .set({
-        isActive,
-        suspendedAt: isActive ? null : new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(creatorProfiles.id, creatorId))
-      .returning({ id: creatorProfiles.id, isActive: creatorProfiles.isActive });
+    const updated = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(creatorProfiles)
+        .set({
+          isActive,
+          suspendedAt: isActive ? null : new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(creatorProfiles.id, creatorId))
+        .returning({
+          id: creatorProfiles.id,
+          userId: creatorProfiles.userId,
+          isActive: creatorProfiles.isActive,
+        });
+
+      if (!row) return null;
+
+      await tx
+        .update(users)
+        .set({ isActive, updatedAt: new Date() })
+        .where(eq(users.id, row.userId));
+
+      await tx.insert(auditLog).values({
+        actorId: auth.account.id,
+        actorRole: auth.account.role,
+        action: isActive ? 'admin.creator_activated' : 'admin.creator_suspended',
+        entityType: 'creator_profiles',
+        entityId: creatorId,
+        metadata: { isActive },
+      });
+
+      return row;
+    });
 
     if (!updated) {
       return NextResponse.json({ error: 'Creator not found.' }, { status: 404 });
     }
-
-    await db.insert(auditLog).values({
-      actorId: auth.account.id,
-      actorRole: 'admin',
-      action: isActive ? 'admin.creator_activated' : 'admin.creator_suspended',
-      entityType: 'creator_profiles',
-      entityId: creatorId,
-      metadata: { isActive },
-    });
 
     return NextResponse.json({ creator: updated });
   } catch (err) {

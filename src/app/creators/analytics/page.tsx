@@ -32,17 +32,21 @@ type Article = {
 };
 
 export default function CreatorAnalyticsPage() {
-  const { user } = useAccount();
+  const { user, isLoading: authLoading } = useAccount();
   const [range, setRange] = useState<'7d' | '30d' | '90d'>('30d');
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
+    if (authLoading) return;
+    let cancelled = false;
     async function loadArticles() {
+      setLoading(true);
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
-          setLoading(false);
+          if (!cancelled) setLoading(false);
           return;
         }
 
@@ -50,19 +54,26 @@ export default function CreatorAnalyticsPage() {
           headers: { Authorization: `Bearer ${session.access_token}` },
           cache: 'no-store',
         });
-        if (response.ok) {
+        if (!cancelled && response.ok) {
           const data = await response.json();
           setArticles(data.articles || []);
+          setError('');
+        } else if (!cancelled) {
+          const data = await response.json().catch(() => null);
+          setError(data?.error || 'Could not load analytics.');
         }
       } catch {
-        // ignore
+        if (!cancelled) setError('Network error loading analytics.');
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
 
-    loadArticles();
-  }, []);
+    void loadArticles();
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, user.id]);
 
   const rangeDays = range === '7d' ? 7 : range === '30d' ? 30 : 90;
   const cutoffMs = Date.now() - rangeDays * 24 * 60 * 60 * 1000;
@@ -98,6 +109,7 @@ export default function CreatorAnalyticsPage() {
             {(['7d', '30d', '90d'] as const).map((r) => (
               <button
                 key={r}
+                type="button"
                 onClick={() => setRange(r)}
                 className={`text-xs px-2 sm:px-2.5 py-1 rounded-md font-medium transition-all ${
                   range === r ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
@@ -119,6 +131,23 @@ export default function CreatorAnalyticsPage() {
               Analyze how often and where your knowledge passages are cited by VeraLM AI searches for {displayName}.
             </p>
           </div>
+
+          {!authLoading && !user.isLoggedIn && (
+            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 text-sm flex flex-wrap items-center justify-between gap-3">
+              <span>Sign in to view citation and quality analytics for your articles.</span>
+              <Link href="/login">
+                <Button size="sm" variant="outline">Sign In</Button>
+              </Link>
+            </div>
+          )}
+          {error && (
+            <div role="alert" className="p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+              {error}
+            </div>
+          )}
+          {loading && !error && (
+            <p className="text-xs text-muted-foreground">Loading analytics...</p>
+          )}
 
           {/* Quick Stats Grid */}
           <div className="grid sm:grid-cols-4 gap-5">

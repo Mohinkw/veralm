@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { and, desc, eq } from 'drizzle-orm';
-import { requireUser } from '@/lib/auth/request';
+import { isValidUuid, parseJsonObject, requireCreator } from '@/lib/auth/request';
 import { db } from '@/db/client';
-import { creatorPayoutMethods, creatorProfiles, users } from '@/db/schema';
+import { creatorPayoutMethods, creatorProfiles } from '@/db/schema';
 
 const ALLOWED_TYPES = new Set([
   'stripe_connect',
@@ -21,68 +21,46 @@ type PayoutMethodType =
   | 'bank_wire'
   | 'crypto';
 
-async function getOrCreateCreatorProfile(userId: string, email?: string | null) {
-  const [existing] = await db
-    .select({
-      id: creatorProfiles.id,
-      minimumPayout: creatorProfiles.minimumPayout,
-      paymentEmail: creatorProfiles.paymentEmail,
-    })
-    .from(creatorProfiles)
-    .where(eq(creatorProfiles.userId, userId))
-    .limit(1);
-
-  if (existing) return existing;
-
-  const safeEmail = email || `${userId}@veralm.user`;
-  await db
-    .insert(users)
-    .values({ id: userId, email: safeEmail, role: 'creator', isActive: true })
-    .onConflictDoNothing();
-
-  const displayName = safeEmail.split('@')[0] || 'Creator';
-  const slugBase =
-    displayName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') ||
-    'creator';
-
-  const [created] = await db
-    .insert(creatorProfiles)
-    .values({
-      userId,
-      displayName,
-      slug: `${slugBase}-${userId.slice(0, 8)}`,
-      bio: 'Verified contributor on VeraLM Knowledge Vault.',
-      primaryCategories: ['Technology'],
-      paymentEmail: email || null,
-      onboardingCompleted: true,
-      isActive: true,
-    })
-    .returning({
-      id: creatorProfiles.id,
-      minimumPayout: creatorProfiles.minimumPayout,
-      paymentEmail: creatorProfiles.paymentEmail,
-    });
-
-  return created;
+function sanitizeDetails(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>).slice(0, 8)) {
+    if (typeof v === 'string' && v.trim()) {
+      out[k.slice(0, 40)] = v.trim().slice(0, 120);
+    }
+  }
+  return out;
 }
 
 export async function GET(request: NextRequest) {
-  const auth = await requireUser(request);
+  const auth = await requireCreator(request);
   if ('error' in auth) return auth.error;
 
   try {
-    const profile = await getOrCreateCreatorProfile(auth.user.id, auth.user.email);
+    const [profile] = await db
+      .select({
+        id: creatorProfiles.id,
+        minimumPayout: creatorProfiles.minimumPayout,
+        paymentEmail: creatorProfiles.paymentEmail,
+      })
+      .from(creatorProfiles)
+      .where(eq(creatorProfiles.id, auth.creatorId))
+      .limit(1);
+
     const methods = await db
       .select()
       .from(creatorPayoutMethods)
-      .where(eq(creatorPayoutMethods.creatorId, profile.id))
+      .where(eq(creatorPayoutMethods.creatorId, auth.creatorId))
       .orderBy(desc(creatorPayoutMethods.isDefault), desc(creatorPayoutMethods.createdAt));
 
-    return NextResponse.json({
-      methods,
-      minimumPayout: Number(profile.minimumPayout || '50'),
-      paymentEmail: profile.paymentEmail,
-    });
+    return NextResponse.json(
+      {
+        methods,
+        minimumPayout: Number(profile?.minimumPayout || '50'),
+        paymentEmail: profile?.paymentEmail || auth.user.email || null,
+      },
+      { headers: { 'Cache-Control': 'private, no-store' } }
+    );
   } catch (err) {
     console.error('[PayoutMethods GET] Error:', err);
     return NextResponse.json({ error: 'Could not load payout methods.' }, { status: 500 });
@@ -90,11 +68,14 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireUser(request);
+  const auth = await requireCreator(request);
   if ('error' in auth) return auth.error;
 
+  const parsed = await parseJsonObject(request);
+  if ('error' in parsed) return parsed.error;
+
   try {
-    const body = await request.json().catch(() => ({}));
+    const body = parsed.data;
     const methodType = body.methodType as PayoutMethodType;
     const label = typeof body.label === 'string' ? body.label.trim() : '';
     const accountIdentifier =
@@ -104,8 +85,7 @@ export async function POST(request: NextRequest) {
         ? body.currency.trim().toUpperCase().slice(0, 6)
         : 'USD';
     const isDefault = Boolean(body.isDefault);
-    const detailsJson =
-      body.details && typeof body.details === 'object' ? body.details : {};
+    const detailsJson = sanitizeDetails(body.details);
 
     if (!ALLOWED_TYPES.has(methodType)) {
       return NextResponse.json({ error: 'Invalid payment method type.' }, { status: 400 });
@@ -120,27 +100,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const profile = await getOrCreateCreatorProfile(auth.user.id, auth.user.email);
-
-    const existingCountRes = await db
-      .select({ id: creatorPayoutMethods.id })
-      .from(creatorPayoutMethods)
-      .where(eq(creatorPayoutMethods.creatorId, profile.id));
-
-    const shouldBeDefault = isDefault || existingCountRes.length === 0;
-
     const created = await db.transaction(async (tx) => {
+      const existing = await tx
+        .select({ id: creatorPayoutMethods.id })
+        .from(creatorPayoutMethods)
+        .where(eq(creatorPayoutMethods.creatorId, auth.creatorId));
+
+      const shouldBeDefault = isDefault || existing.length === 0;
+
       if (shouldBeDefault) {
         await tx
           .update(creatorPayoutMethods)
           .set({ isDefault: false, updatedAt: new Date() })
-          .where(eq(creatorPayoutMethods.creatorId, profile.id));
+          .where(eq(creatorPayoutMethods.creatorId, auth.creatorId));
       }
 
       const [inserted] = await tx
         .insert(creatorPayoutMethods)
         .values({
-          creatorId: profile.id,
+          creatorId: auth.creatorId,
           methodType,
           label,
           accountIdentifier,
@@ -150,11 +128,11 @@ export async function POST(request: NextRequest) {
         })
         .returning();
 
-      if (accountIdentifier.includes('@')) {
+      if (shouldBeDefault && accountIdentifier.includes('@')) {
         await tx
           .update(creatorProfiles)
           .set({ paymentEmail: accountIdentifier, updatedAt: new Date() })
-          .where(eq(creatorProfiles.id, profile.id));
+          .where(eq(creatorProfiles.id, auth.creatorId));
       }
 
       return inserted;
@@ -168,36 +146,56 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const auth = await requireUser(request);
+  const auth = await requireCreator(request);
   if ('error' in auth) return auth.error;
 
+  const parsed = await parseJsonObject(request);
+  if ('error' in parsed) return parsed.error;
+
   try {
-    const body = await request.json().catch(() => ({}));
-    const methodId = typeof body.id === 'string' ? body.id : '';
-    if (!methodId) {
-      return NextResponse.json({ error: 'Method ID is required.' }, { status: 400 });
+    const methodId = parsed.data.id;
+    if (!isValidUuid(methodId)) {
+      return NextResponse.json({ error: 'Valid method ID is required.' }, { status: 400 });
     }
 
-    const profile = await getOrCreateCreatorProfile(auth.user.id, auth.user.email);
+    const updated = await db.transaction(async (tx) => {
+      const [target] = await tx
+        .select({ id: creatorPayoutMethods.id })
+        .from(creatorPayoutMethods)
+        .where(
+          and(
+            eq(creatorPayoutMethods.id, methodId),
+            eq(creatorPayoutMethods.creatorId, auth.creatorId)
+          )
+        )
+        .limit(1);
 
-    await db.transaction(async (tx) => {
+      if (!target) return null;
+
       await tx
         .update(creatorPayoutMethods)
         .set({ isDefault: false, updatedAt: new Date() })
-        .where(eq(creatorPayoutMethods.creatorId, profile.id));
+        .where(eq(creatorPayoutMethods.creatorId, auth.creatorId));
 
-      await tx
+      const [row] = await tx
         .update(creatorPayoutMethods)
         .set({ isDefault: true, updatedAt: new Date() })
         .where(
           and(
             eq(creatorPayoutMethods.id, methodId),
-            eq(creatorPayoutMethods.creatorId, profile.id)
+            eq(creatorPayoutMethods.creatorId, auth.creatorId)
           )
-        );
+        )
+        .returning();
+
+      return row;
     });
 
-    return NextResponse.json({ success: true });
+    if (!updated) {
+      return NextResponse.json({ error: 'Payout method not found.' }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true, method: updated });
   } catch (err) {
     console.error('[PayoutMethods PATCH] Error:', err);
     return NextResponse.json({ error: 'Could not update default method.' }, { status: 500 });
@@ -205,25 +203,45 @@ export async function PATCH(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const auth = await requireUser(request);
+  const auth = await requireCreator(request);
   if ('error' in auth) return auth.error;
 
   try {
     const methodId = request.nextUrl.searchParams.get('id') || '';
-    if (!methodId) {
-      return NextResponse.json({ error: 'Method ID is required.' }, { status: 400 });
+    if (!isValidUuid(methodId)) {
+      return NextResponse.json({ error: 'Valid method ID is required.' }, { status: 400 });
     }
 
-    const profile = await getOrCreateCreatorProfile(auth.user.id, auth.user.email);
-
-    await db
+    const [deleted] = await db
       .delete(creatorPayoutMethods)
       .where(
         and(
           eq(creatorPayoutMethods.id, methodId),
-          eq(creatorPayoutMethods.creatorId, profile.id)
+          eq(creatorPayoutMethods.creatorId, auth.creatorId)
         )
-      );
+      )
+      .returning({ id: creatorPayoutMethods.id, wasDefault: creatorPayoutMethods.isDefault });
+
+    if (!deleted) {
+      return NextResponse.json({ error: 'Payout method not found.' }, { status: 404 });
+    }
+
+    // Reassign default if the deleted method was active default
+    if (deleted.wasDefault) {
+      const [nextMethod] = await db
+        .select({ id: creatorPayoutMethods.id })
+        .from(creatorPayoutMethods)
+        .where(eq(creatorPayoutMethods.creatorId, auth.creatorId))
+        .orderBy(desc(creatorPayoutMethods.createdAt))
+        .limit(1);
+
+      if (nextMethod) {
+        await db
+          .update(creatorPayoutMethods)
+          .set({ isDefault: true, updatedAt: new Date() })
+          .where(eq(creatorPayoutMethods.id, nextMethod.id));
+      }
+    }
 
     return NextResponse.json({ success: true });
   } catch (err) {

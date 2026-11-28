@@ -19,7 +19,7 @@ type Article = {
 };
 
 export default function CreatorArticlesPage() {
-  const { user } = useAccount();
+  const { user, isLoading: authLoading } = useAccount();
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -29,10 +29,8 @@ export default function CreatorArticlesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const displayName = user.name || user.email?.split('@')[0] || 'Creator';
-  const initial = displayName.charAt(0).toUpperCase();
-
   useEffect(() => {
+    if (authLoading) return;
     const controller = new AbortController();
     async function load() {
       setLoading(true); setError(''); setArticles([]);
@@ -50,7 +48,7 @@ export default function CreatorArticlesPage() {
     }
     void load();
     return () => controller.abort();
-  }, [page, filterStatus, searchQuery]);
+  }, [authLoading, user.id, page, filterStatus, searchQuery]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -97,6 +95,7 @@ export default function CreatorArticlesPage() {
             <div className="relative w-full sm:w-80">
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
+                aria-label="Search article titles"
                 placeholder="Search article titles..." maxLength={100}
                 value={searchQuery}
                 onChange={(e) => { setPage(0); setSearchQuery(e.target.value); }}
@@ -108,6 +107,7 @@ export default function CreatorArticlesPage() {
               {['all', 'approved', 'pending_review', 'under_ai_review', 'requires_revision', 'draft', 'rejected', 'suspended', 'archived', 'withdrawn'].map((status) => (
                 <button
                   key={status}
+                  type="button"
                   onClick={() => { setPage(0); setFilterStatus(status); }}
                   className={`text-xs px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition-all ${
                     filterStatus === status

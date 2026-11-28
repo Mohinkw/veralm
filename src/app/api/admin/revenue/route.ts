@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { desc } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { auditLog, platformRevenue } from '@/db/schema';
 import { requireAdmin } from '@/lib/admin/auth';
+import { parseJsonObject } from '@/lib/auth/request';
 import { executeCreatorPayouts } from '@/lib/revenue/payouts';
 
 export async function GET(request: NextRequest) {
-  const auth = await requireAdmin(request);
-  if (auth.error) return auth.error;
-
   try {
+    const auth = await requireAdmin(request);
+    if (auth.error) return auth.error;
+
     const rows = await db
       .select()
       .from(platformRevenue)
@@ -27,16 +28,22 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireAdmin(request);
-  if (auth.error) return auth.error;
-
   try {
-    const body = await request.json().catch(() => ({}));
+    const auth = await requireAdmin(request);
+    if (auth.error) return auth.error;
+
+    const parsed = await parseJsonObject(request);
+    if ('error' in parsed) return parsed.error;
+    const body = parsed.data;
 
     if (body.action === 'distribute') {
-      const period = typeof body.period === 'string' && /^\d{4}-\d{2}$/.test(body.period)
-        ? body.period
-        : undefined;
+      let period: string | undefined;
+      if (body.period !== undefined && body.period !== null && body.period !== '') {
+        if (typeof body.period !== 'string' || !/^\d{4}-\d{2}$/.test(body.period.trim())) {
+          return NextResponse.json({ error: 'period must be YYYY-MM.' }, { status: 400 });
+        }
+        period = body.period.trim();
+      }
       const summary = await executeCreatorPayouts({
         period,
         actorId: auth.account.id,
@@ -49,13 +56,34 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'revenuePeriod must be YYYY-MM.' }, { status: 400 });
     }
 
-    const subscriptionRevenue = Math.max(0, Number(body.subscriptionRevenue || 0));
-    const adRevenue = Math.max(0, Number(body.adRevenue || 0));
-    const infrastructureCost = Math.max(0, Number(body.infrastructureCost ?? 45));
+    const rawSub = Number(body.subscriptionRevenue ?? 0);
+    const rawAd = Number(body.adRevenue ?? 0);
+    const rawInfra = Number(body.infrastructureCost ?? 45);
+    if (!Number.isFinite(rawSub) || !Number.isFinite(rawAd) || !Number.isFinite(rawInfra)) {
+      return NextResponse.json({ error: 'Revenue and cost amounts must be valid numbers.' }, { status: 400 });
+    }
+
+    const subscriptionRevenue = Math.max(0, rawSub);
+    const adRevenue = Math.max(0, rawAd);
+    const infrastructureCost = Math.max(0, rawInfra);
     const grossRevenue = subscriptionRevenue + adRevenue;
     const netDistributable = Math.max(0, grossRevenue - infrastructureCost);
     const creatorPool = netDistributable * 0.9;
     const creatorPoolPct = grossRevenue > 0 ? (creatorPool / grossRevenue) * 100 : 0;
+
+    // Protect closed or audited revenue periods from silent mutation
+    const [existing] = await db
+      .select({ id: platformRevenue.id, status: platformRevenue.status })
+      .from(platformRevenue)
+      .where(eq(platformRevenue.revenuePeriod, revenuePeriod))
+      .limit(1);
+
+    if (existing && (existing.status === 'closed' || existing.status === 'audited')) {
+      return NextResponse.json(
+        { error: `Revenue period ${revenuePeriod} is already ${existing.status}.` },
+        { status: 409 }
+      );
+    }
 
     const [saved] = await db
       .insert(platformRevenue)
@@ -85,7 +113,7 @@ export async function POST(request: NextRequest) {
 
     await db.insert(auditLog).values({
       actorId: auth.account.id,
-      actorRole: 'admin',
+      actorRole: auth.account.role,
       action: 'admin.revenue_recorded',
       entityType: 'platform_revenue',
       entityId: saved.id,

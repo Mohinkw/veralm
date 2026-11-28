@@ -16,10 +16,14 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 
 // Server-side client with service role key (for admin operations)
 export function createServerClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL;
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
-  
-  return createClient(supabaseUrl, supabaseServiceKey, {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceKey || serviceKey.includes('placeholder')) {
+    console.warn('[Supabase] SUPABASE_SERVICE_ROLE_KEY is missing or placeholder; server mutations may fail RLS.');
+  }
+  const key = serviceKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
+
+  return createClient(url, key, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,

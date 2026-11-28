@@ -224,33 +224,53 @@ export function CreatorPayoutMethods() {
   };
 
   const handleSetDefault = async (id: string) => {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session) return;
+    setError('');
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) return;
 
-    await fetch('/api/creators/payout-methods', {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({ id }),
-    });
-    await loadMethods();
+      const res = await fetch('/api/creators/payout-methods', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ id }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        setError(body?.error || 'Could not update default payout method.');
+        return;
+      }
+      await loadMethods();
+    } catch {
+      setError('Network error updating default payout method.');
+    }
   };
 
   const handleDelete = async (id: string) => {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session) return;
+    setError('');
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) return;
 
-    await fetch(`/api/creators/payout-methods?id=${encodeURIComponent(id)}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    });
-    await loadMethods();
+      const res = await fetch(`/api/creators/payout-methods?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        setError(body?.error || 'Could not remove payout method.');
+        return;
+      }
+      await loadMethods();
+    } catch {
+      setError('Network error removing payout method.');
+    }
   };
 
   return (
@@ -338,6 +358,7 @@ export function CreatorPayoutMethods() {
                     variant="ghost"
                     className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
                     onClick={() => handleDelete(m.id)}
+                    aria-label="Remove payment method"
                     title="Remove payment method"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -387,16 +408,18 @@ export function CreatorPayoutMethods() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-xs font-medium">Account Label</label>
+              <label htmlFor="pm-label" className="text-xs font-medium">Account Label</label>
               <Input
+                id="pm-label"
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
                 placeholder={selectedMeta.name.split(' (')[0]}
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-medium">Payout Currency</label>
+              <label htmlFor="pm-currency" className="text-xs font-medium">Payout Currency</label>
               <Input
+                id="pm-currency"
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value.toUpperCase())}
                 placeholder="USD"
@@ -406,8 +429,9 @@ export function CreatorPayoutMethods() {
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-medium">Account Email / ID / Number</label>
+            <label htmlFor="pm-identifier" className="text-xs font-medium">Account Email / ID / Number</label>
             <Input
+              id="pm-identifier"
               required
               value={accountIdentifier}
               onChange={(e) => setAccountIdentifier(e.target.value)}
@@ -418,16 +442,18 @@ export function CreatorPayoutMethods() {
           {methodType === 'bank_wire' && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="text-xs font-medium">Bank Name</label>
+                <label htmlFor="pm-bank-name" className="text-xs font-medium">Bank Name</label>
                 <Input
+                  id="pm-bank-name"
                   value={bankName}
                   onChange={(e) => setBankName(e.target.value)}
                   placeholder="e.g. Citibank / HSBC"
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-medium">SWIFT / BIC Code</label>
+                <label htmlFor="pm-bank-swift" className="text-xs font-medium">SWIFT / BIC Code</label>
                 <Input
+                  id="pm-bank-swift"
                   value={bankSwift}
                   onChange={(e) => setBankSwift(e.target.value)}
                   placeholder="e.g. CITIUS33"
@@ -438,8 +464,9 @@ export function CreatorPayoutMethods() {
 
           {methodType === 'crypto' && (
             <div className="space-y-1">
-              <label className="text-xs font-medium">Blockchain Network</label>
+              <label htmlFor="pm-crypto-network" className="text-xs font-medium">Blockchain Network</label>
               <select
+                id="pm-crypto-network"
                 value={cryptoNetwork}
                 onChange={(e) => setCryptoNetwork(e.target.value)}
                 className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"

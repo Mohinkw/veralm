@@ -179,6 +179,7 @@ export const articles = pgTable('articles', {
   approvedAt: timestamp('approved_at', { withTimezone: true }),
   lastReviewedAt: timestamp('last_reviewed_at', { withTimezone: true }),
   expiresAt: timestamp('expires_at', { withTimezone: true }),
+  withdrawalEffectiveAt: timestamp('withdrawal_effective_at', { withTimezone: true }),
   status: articleStatusEnum('status').default('pending_review').notNull(),
   rejectionReason: text('rejection_reason'),
   revisionInstructions: text('revision_instructions'),

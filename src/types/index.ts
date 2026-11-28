@@ -390,6 +390,7 @@ export interface SearchArticleUsed extends ArticleCitation {
 }
 
 export interface SearchApiResponse {
+  query_id?: string;
   answer: string;
   citations: SearchCitation[];
   articles_used: SearchArticleUsed[];

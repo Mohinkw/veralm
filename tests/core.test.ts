@@ -10,8 +10,12 @@ import { calculateRevenueDistribution } from '../src/lib/revenue/calculator';
 import {
   createCitationToken,
   isExternalSearchEngineReferer,
+  signSessionCookie,
   verifyCitationToken,
+  verifySignedSessionCookie,
 } from '../src/lib/citation-token';
+import { safeJsonLd, sanitizeHttpUrl, slugify } from '../src/lib/utils';
+import { chunkTextWithMeta, extractCitedIndices } from '../src/lib/rag-utils';
 import { verifyStripeSignature } from '../src/lib/stripe-webhook';
 import { verifyPolarWebhookSignature } from '../src/lib/polar-webhook';
 import { extractArticleSlugFromPath } from '../src/lib/revenue/ga4';
@@ -154,4 +158,67 @@ test('parseSentryDsn builds envelope URL from valid DSN', () => {
     publicKey: 'abc123',
   });
   assert.equal(parseSentryDsn('not-a-dsn'), null);
+});
+
+test('signSessionCookie and verifySignedSessionCookie reject tampered or expired cookies', () => {
+  const uid = '11111111-2222-3333-4444-555555555555';
+  const signed = signSessionCookie(uid, 3600);
+  assert.equal(verifySignedSessionCookie(signed), uid);
+
+  const tampered = `${signed.slice(0, -1)}${signed.endsWith('0') ? '1' : '0'}`;
+  assert.equal(verifySignedSessionCookie(tampered), null);
+
+  const expired = signSessionCookie(uid, -10);
+  assert.equal(verifySignedSessionCookie(expired), null);
+
+  assert.equal(verifySignedSessionCookie('not-a-cookie'), null);
+  assert.equal(verifySignedSessionCookie(uid), null);
+});
+
+test('slugify handles Latin, Bengali/non-Latin Unicode, and empty strings safely', () => {
+  assert.equal(slugify('Hello World! 2026'), 'hello-world-2026');
+  const bnSlug = slugify('বাংলা ভাষায় কৃত্রিম বুদ্ধিমত্তা');
+  assert.match(bnSlug, /^post-[0-9a-f]{10}$/);
+  assert.equal(slugify('   '), '');
+});
+
+test('validateContentHeuristics supports Unicode/Bengali lexical diversity and Dari sentences', () => {
+  const uniqueBn = Array.from({ length: 165 }, (_, i) => `শব্দ${i + 1}`).join(' ') + '। ';
+  const article = `## বাংলা শিরোনাম\n\n${uniqueBn}\n\nতথ্যসূত্র: https://example.com\n\n- পয়েন্ট এক\n- পয়েন্ট দুই`;
+  const report = validateContentHeuristics(article, 'বাংলা শিরোনাম');
+  assert.equal(report.passed, true);
+  assert.ok(report.lexicalDiversity > 0.5);
+  assert.equal(report.hasHeadings, true);
+  assert.equal(report.hasLists, true);
+});
+
+test('sanitizeHttpUrl and safeJsonLd mitigate javascript/script-breakout XSS vectors', () => {
+  assert.equal(sanitizeHttpUrl('https://veralm.com/test?a=1'), 'https://veralm.com/test?a=1');
+  assert.equal(sanitizeHttpUrl('http://example.org/img.png'), 'http://example.org/img.png');
+  assert.equal(sanitizeHttpUrl('javascript:alert(1)'), null);
+  assert.equal(sanitizeHttpUrl('data:text/html,<script>alert(1)</script>'), null);
+
+  const serialized = safeJsonLd({ name: 'Test </script><script>alert(1)</script>' });
+  assert.equal(serialized.includes('</script>'), false);
+  assert.ok(serialized.includes('\\u003c/script>'));
+});
+
+test('chunkTextWithMeta preserves headings and never splits UTF-16 surrogate pairs', () => {
+  const prefix = '# Top Heading\n\n## Sub Section\n\n';
+  const fill = 'A'.repeat(300 - prefix.length - 1);
+  const emojiPara = fill + '🚀' + 'B'.repeat(240);
+  const doc = `${prefix}${emojiPara}\n\n## Next Section\n\n${'word '.repeat(120)}`;
+  const chunks = chunkTextWithMeta(doc, 300, 40);
+  assert.ok(chunks.length >= 2);
+  assert.equal(chunks[0].isIntroChunk, true);
+  assert.ok(chunks[0].heading);
+  for (const chunk of chunks) {
+    assert.equal(chunk.text.isWellFormed(), true);
+    assert.doesNotThrow(() => encodeURIComponent(chunk.text));
+  }
+});
+
+test('extractCitedIndices extracts only in-range 1-based bracketed citations', () => {
+  const cited = extractCitedIndices('Claim [1] is backed by [2], while [0] and [9] are ignored.', 3);
+  assert.deepEqual([...cited].sort((a, b) => a - b), [1, 2]);
 });

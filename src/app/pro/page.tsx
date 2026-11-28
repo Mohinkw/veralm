@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import {
-  ArrowLeft,
   BookOpen,
   CheckCircle2,
   Crown,
@@ -12,12 +11,12 @@ import {
   Zap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { VeraLMLogo } from '@/components/veralm-logo';
+import { Navbar } from '@/components/navbar';
 import { useAccount } from '@/lib/account-context';
 import { supabase } from '@/lib/supabase';
 
 export default function VeraLMProPage() {
-  const { user, refreshProStatus } = useAccount();
+  const { user, isLoading: authLoading, refreshProStatus } = useAccount();
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -67,28 +66,12 @@ export default function VeraLMProPage() {
     }
   };
 
-  const price = billingCycle === 'annual' ? '$79' : '$9';
+  const price = billingCycle === 'annual' ? '$89' : '$9';
   const period = billingCycle === 'annual' ? '/year' : '/month';
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border sticky top-0 z-50 bg-background/95 backdrop-blur">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 font-bold text-xl">
-            <VeraLMLogo className="h-6 w-6" />
-            <span>VeraLM</span>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 font-semibold">
-              Pro
-            </span>
-          </Link>
-          <Link href="/">
-            <Button variant="outline" size="sm" className="gap-1.5">
-              <ArrowLeft className="h-4 w-4" />
-              Back to Chat
-            </Button>
-          </Link>
-        </div>
-      </header>
+      <Navbar />
 
       <main className="py-12 px-4">
         <div className="container mx-auto max-w-4xl space-y-10">
@@ -128,7 +111,7 @@ export default function VeraLMProPage() {
                     : 'text-muted-foreground'
                 }`}
               >
-                Annual (Save 27%)
+                Annual (Save 18%)
               </button>
             </div>
           </div>
@@ -198,7 +181,11 @@ export default function VeraLMProPage() {
                 </li>
               </ul>
 
-              {user.isPro ? (
+              {authLoading ? (
+                <Button disabled className="w-full">
+                  Checking account...
+                </Button>
+              ) : user.isPro ? (
                 <Button disabled className="w-full">
                   VeraLM Pro Active
                 </Button>

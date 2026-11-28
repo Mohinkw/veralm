@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { eq } from 'drizzle-orm';
-import { requireUser } from '@/lib/auth/request';
+import { parseJsonObject, requireCreator } from '@/lib/auth/request';
 import { db } from '@/db/client';
 import { auditLog, creatorProfiles } from '@/db/schema';
 
@@ -14,7 +14,7 @@ function parseStoredTaxId(raw: string | null): { taxFormType: 'w9' | 'w8ben' | n
 }
 
 export async function GET(request: NextRequest) {
-  const auth = await requireUser(request);
+  const auth = await requireCreator(request);
   if ('error' in auth) return auth.error;
 
   try {
@@ -24,16 +24,19 @@ export async function GET(request: NextRequest) {
         taxId: creatorProfiles.taxId,
       })
       .from(creatorProfiles)
-      .where(eq(creatorProfiles.userId, auth.user.id))
+      .where(eq(creatorProfiles.id, auth.creatorId))
       .limit(1);
 
     const parsed = parseStoredTaxId(profile?.taxId || null);
-    return NextResponse.json({
-      hasTaxInfo: Boolean(profile?.taxCountry && profile?.taxId),
-      taxCountry: profile?.taxCountry || '',
-      taxFormType: parsed.taxFormType,
-      taxIdMasked: parsed.taxIdMasked,
-    });
+    return NextResponse.json(
+      {
+        hasTaxInfo: Boolean(profile?.taxCountry && profile?.taxId),
+        taxCountry: profile?.taxCountry || '',
+        taxFormType: parsed.taxFormType,
+        taxIdMasked: parsed.taxIdMasked,
+      },
+      { headers: { 'Cache-Control': 'private, no-store' } }
+    );
   } catch (err) {
     console.error('[TaxInfo GET] Error:', err);
     return NextResponse.json({ error: 'Could not load tax information.' }, { status: 500 });
@@ -41,11 +44,14 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireUser(request);
+  const auth = await requireCreator(request);
   if ('error' in auth) return auth.error;
 
+  const parsed = await parseJsonObject(request);
+  if ('error' in parsed) return parsed.error;
+
   try {
-    const body = await request.json().catch(() => ({}));
+    const body = parsed.data;
     const taxFormType = body.taxFormType === 'w9' ? 'w9' : body.taxFormType === 'w8ben' ? 'w8ben' : null;
     const taxCountry = typeof body.taxCountry === 'string' ? body.taxCountry.trim() : '';
     const taxId = typeof body.taxId === 'string' ? body.taxId.trim() : '';
@@ -67,14 +73,11 @@ export async function POST(request: NextRequest) {
         taxId: `${taxFormType.toUpperCase()}:${taxId}`,
         updatedAt: new Date(),
       })
-      .where(eq(creatorProfiles.userId, auth.user.id))
+      .where(eq(creatorProfiles.id, auth.creatorId))
       .returning({ id: creatorProfiles.id });
 
     if (!updated) {
-      return NextResponse.json(
-        { error: 'Creator profile not found. Please save a payout method or submit an article first.' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Creator profile not found.' }, { status: 404 });
     }
 
     await db.insert(auditLog).values({
@@ -86,12 +89,15 @@ export async function POST(request: NextRequest) {
       metadata: { taxFormType, taxCountry },
     });
 
-    return NextResponse.json({
-      saved: true,
-      taxFormType,
-      taxCountry,
-      taxIdMasked: `****${taxId.slice(-4)}`,
-    });
+    return NextResponse.json(
+      {
+        saved: true,
+        taxFormType,
+        taxCountry,
+        taxIdMasked: `****${taxId.slice(-4)}`,
+      },
+      { headers: { 'Cache-Control': 'private, no-store' } }
+    );
   } catch (err) {
     console.error('[TaxInfo POST] Error:', err);
     return NextResponse.json({ error: 'Could not save tax information.' }, { status: 500 });

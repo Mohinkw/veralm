@@ -1,11 +1,11 @@
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { cookies, headers } from 'next/headers';
 import { Navbar } from '@/components/navbar';
 import {
   Sparkles,
   ShieldCheck,
-  ShieldAlert,
   Lock,
   Unlock,
   Award,
@@ -17,15 +17,20 @@ import {
   Tag,
   Star,
   CheckCircle2,
-  Share2,
   DollarSign,
   ChevronRight,
   UserPlus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { isExternalSearchEngineReferer, verifyCitationToken } from '@/lib/citation-token';
+import {
+  isExternalSearchEngineReferer,
+  verifyCitationToken,
+  verifySignedSessionCookie,
+} from '@/lib/citation-token';
 import { executeRawSQL } from '@/db/client';
 import { createServerClient } from '@/lib/supabase';
+import { isValidUuid } from '@/lib/auth/request';
+import { sanitizeHttpUrl } from '@/lib/utils';
 import { MarkdownRenderer } from '@/components/markdown-renderer';
 import { ArticleRating } from '@/components/article-rating';
 
@@ -144,7 +149,9 @@ export async function generateMetadata({
 }
 
 async function fetchArticle(slugOrId: string) {
-  // 1. Direct PostgreSQL pool query
+  const byUuid = isValidUuid(slugOrId);
+
+  // 1. Direct PostgreSQL pool query (approved + active licensed knowledge only)
   try {
     const sql = `
       SELECT 
@@ -168,12 +175,18 @@ async function fetchArticle(slugOrId: string) {
         cp.reputation_score as author_reputation
       FROM articles a
       LEFT JOIN creator_profiles cp ON a.creator_id = cp.id
-      WHERE lower(a.slug) = lower($1)
-         OR a.id::text = $1
-         OR replace(lower(a.slug), '-', '') = replace(lower($1), '-', '')
+      WHERE a.status = 'approved'
+        AND (a.licensing_status IS NULL OR a.licensing_status = 'active')
+        AND (a.withdrawal_effective_at IS NULL OR a.withdrawal_effective_at > NOW())
+        AND (cp.id IS NULL OR cp.is_active = true)
+        AND (
+          lower(a.slug) = lower($1)
+          OR ($2::boolean AND a.id::text = $1)
+          OR replace(lower(a.slug), '-', '') = replace(lower($1), '-', '')
+        )
       LIMIT 1;
     `;
-    const res = await executeRawSQL(sql, [slugOrId]);
+    const res = await executeRawSQL(sql, [slugOrId, byUuid]);
     if (res && res.rows && res.rows.length > 0) {
       return res.rows[0];
     }
@@ -184,23 +197,35 @@ async function fetchArticle(slugOrId: string) {
   // 2. Supabase REST API fallback
   try {
     const client = createServerClient();
+    const lookupCol = byUuid ? 'id' : 'slug';
     const { data } = await client
       .from('articles')
-      .select('*, creator_profiles(id, display_name, bio, profile_image_url, reputation_tier, reputation_score)')
-      .or(`slug.eq.${slugOrId},id.eq.${slugOrId}`)
+      .select(
+        'id, title, slug, content, excerpt, tags, images_json, word_count, status, approved_at, created_at, composite_quality_score, licensing_status, withdrawal_effective_at, creator_profiles(id, display_name, bio, profile_image_url, reputation_tier, reputation_score, is_active)'
+      )
+      .eq(lookupCol, slugOrId)
+      .eq('status', 'approved')
       .limit(1)
       .maybeSingle();
 
     if (data) {
-      const creator = (data as any).creator_profiles;
-      return {
-        ...data,
-        author_name: creator?.display_name || 'Verified Contributor',
-        author_bio: creator?.bio,
-        author_avatar: creator?.profile_image_url,
-        author_tier: creator?.reputation_tier || 'contributor',
-        author_reputation: creator?.reputation_score,
-      };
+      const record = data as any;
+      const withdrawn =
+        record.licensing_status && record.licensing_status !== 'active';
+      const pastWithdrawal =
+        record.withdrawal_effective_at &&
+        new Date(record.withdrawal_effective_at).getTime() <= Date.now();
+      const creator = record.creator_profiles;
+      if (!withdrawn && !pastWithdrawal && (!creator || creator.is_active !== false)) {
+        return {
+          ...record,
+          author_name: creator?.display_name || 'Verified Contributor',
+          author_bio: creator?.bio,
+          author_avatar: creator?.profile_image_url,
+          author_tier: creator?.reputation_tier || 'contributor',
+          author_reputation: creator?.reputation_score,
+        };
+      }
     }
   } catch (err) {
     console.warn('[Article Page] Supabase REST fetch error:', err);
@@ -229,10 +254,12 @@ async function fetchArticle(slugOrId: string) {
 async function getViewerAccess(): Promise<{ isPro: boolean; isSignedInMember: boolean }> {
   try {
     const cookieStore = await cookies();
-    const proUid = cookieStore.get('veralm_pro_uid')?.value;
-    const readerUid = cookieStore.get('veralm_reader_uid')?.value;
-    const uid = proUid || readerUid;
-    if (!uid) return { isPro: false, isSignedInMember: false };
+    const rawProUid = cookieStore.get('veralm_pro_uid')?.value;
+    const rawReaderUid = cookieStore.get('veralm_reader_uid')?.value;
+    const uid =
+      verifySignedSessionCookie(rawProUid) ||
+      verifySignedSessionCookie(rawReaderUid);
+    if (!uid || !isValidUuid(uid)) return { isPro: false, isSignedInMember: false };
 
     const res = await executeRawSQL(
       `SELECT id, subscription_tier, pro_expires_at, is_active, role FROM users WHERE id = $1 LIMIT 1`,
@@ -268,41 +295,62 @@ export default async function ArticlePreviewPage({ params, searchParams }: Props
   const isAuthorized = hasValidCitation || isPro || isSignedInMember;
 
   const article = await fetchArticle(slug);
+  if (!article) {
+    notFound();
+  }
 
-  const displayTitle =
-    article?.title ||
-    slug
-      .split('-')
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
+  const displayTitle = article.title;
 
-  const authorName = article?.author_name || 'Verified Creator';
+  const authorName = article.author_name || 'Verified Creator';
   const authorBio =
-    article?.author_bio ||
+    article.author_bio ||
     'Verified domain contributor and intellectual property licensor to the VeraLM AI Model.';
-  const authorAvatar = article?.author_avatar;
-  const authorTier = article?.author_tier || 'Verified Creator';
+  const authorAvatar = sanitizeHttpUrl(article.author_avatar);
+  const authorTier = article.author_tier || 'Verified Creator';
 
   const excerpt =
-    article?.excerpt ||
+    article.excerpt ||
     'This verified article is part of the VeraLM knowledge database, licensed directly from expert creators to ground AI answers with verifiable truth.';
 
-  const fullContent = article?.content || excerpt;
-  const qualityScore = article?.composite_quality_score
+  const fullContent = article.content || excerpt;
+  const qualityScore = article.composite_quality_score
     ? Math.round(Number(article.composite_quality_score))
     : 95;
 
-  const tags: string[] = Array.isArray(article?.tags)
-    ? article.tags
-    : typeof article?.tags === 'string'
-    ? JSON.parse(article.tags || '[]')
-    : [];
+  const parseJsonArray = (raw: unknown): unknown[] => {
+    if (Array.isArray(raw)) return raw;
+    if (typeof raw === 'string' && raw.trim()) {
+      try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  };
 
-  const images: string[] = Array.isArray(article?.images_json)
-    ? article.images_json
-    : typeof article?.images_json === 'string'
-    ? JSON.parse(article.images_json || '[]')
-    : [];
+  const tags: string[] = parseJsonArray(article.tags).filter(
+    (t): t is string => typeof t === 'string' && t.trim().length > 0
+  );
+
+  const images: { url: string; caption: string }[] = parseJsonArray(article.images_json)
+    .map((item, idx) => {
+      const rawUrl =
+        typeof item === 'string'
+          ? item
+          : item && typeof item === 'object' && 'source_url' in item
+          ? String((item as { source_url?: unknown }).source_url ?? '')
+          : '';
+      const safeUrl = sanitizeHttpUrl(rawUrl);
+      if (!safeUrl) return null;
+      const caption =
+        item && typeof item === 'object' && 'caption' in item && typeof (item as { caption?: unknown }).caption === 'string'
+          ? (item as { caption: string }).caption
+          : `Figure ${idx + 1}`;
+      return { url: safeUrl, caption };
+    })
+    .filter((item): item is { url: string; caption: string } => item !== null);
 
   const wordCount =
     article?.word_count ||
@@ -471,14 +519,14 @@ export default async function ArticlePreviewPage({ params, searchParams }: Props
                       Attached Article Media ({images.length})
                     </h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {images.map((imgUrl, idx) => (
+                      {images.map((img, idx) => (
                         <div
                           key={idx}
                           className="rounded-xl overflow-hidden border border-border bg-muted/30 aspect-video relative group"
                         >
                           <img
-                            src={imgUrl}
-                            alt={`Figure ${idx + 1}`}
+                            src={img.url}
+                            alt={img.caption}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           />
                         </div>

@@ -2,7 +2,8 @@
 
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
-import { cn } from '@/lib/utils';
+import remarkGfm from 'remark-gfm';
+import { cn, sanitizeHttpUrl } from '@/lib/utils';
 
 interface MarkdownRendererProps {
   content: string;
@@ -13,8 +14,9 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
   if (!content) return null;
 
   return (
-    <div className={cn('markdown-body text-foreground leading-relaxed', className)}>
+    <div className={cn('markdown-body text-foreground leading-relaxed break-words', className)}>
       <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
         components={{
           h1: ({ children }) => (
             <h1 className="text-2xl font-bold mt-6 mb-3 text-foreground tracking-tight border-b border-border/40 pb-2">
@@ -51,46 +53,41 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
               {children}
             </ol>
           ),
-          li: ({ children }) => (
-            <li className="leading-7 pl-1">
-              {children}
-            </li>
-          ),
+          li: ({ children }) => <li className="leading-7 pl-1">{children}</li>,
           strong: ({ children }) => (
-            <strong className="font-semibold text-foreground">
-              {children}
-            </strong>
+            <strong className="font-semibold text-foreground">{children}</strong>
           ),
-          em: ({ children }) => (
-            <em className="italic text-foreground/95">
-              {children}
-            </em>
-          ),
+          em: ({ children }) => <em className="italic text-foreground/95">{children}</em>,
+          del: ({ children }) => <del className="line-through text-muted-foreground">{children}</del>,
           blockquote: ({ children }) => (
             <blockquote className="border-l-4 border-primary/40 pl-4 py-1 my-3 italic text-muted-foreground bg-muted/20 rounded-r-lg">
               {children}
             </blockquote>
           ),
-          code: ({ inline, className: codeClassName, children, ...props }: any) => {
-            if (inline) {
+          pre: ({ children }) => (
+            <div className="relative my-3 rounded-xl overflow-hidden border border-border bg-muted/60">
+              <pre className="p-4 overflow-x-auto text-xs font-mono text-foreground leading-relaxed">
+                {children}
+              </pre>
+            </div>
+          ),
+          code: ({ className: codeClassName, children, ...props }: React.HTMLAttributes<HTMLElement>) => {
+            const rawText = String(children ?? '');
+            const isBlock = Boolean(codeClassName) || rawText.includes('\n');
+            if (isBlock) {
               return (
-                <code
-                  className={cn(
-                    'bg-muted px-1.5 py-0.5 rounded text-xs font-mono text-primary font-medium border border-border/40',
-                    codeClassName
-                  )}
-                  {...props}
-                >
+                <code className={cn('font-mono text-xs', codeClassName)} {...props}>
                   {children}
                 </code>
               );
             }
             return (
-              <div className="relative my-3 rounded-xl overflow-hidden border border-border bg-muted/60">
-                <pre className="p-4 overflow-x-auto text-xs font-mono text-foreground leading-relaxed">
-                  <code {...props}>{children}</code>
-                </pre>
-              </div>
+              <code
+                className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono text-primary font-medium border border-border/40"
+                {...props}
+              >
+                {children}
+              </code>
             );
           },
           hr: () => <hr className="my-6 border-border" />,
@@ -104,18 +101,43 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
           thead: ({ children }) => <thead className="bg-muted/50 font-semibold">{children}</thead>,
           tbody: ({ children }) => <tbody className="divide-y divide-border">{children}</tbody>,
           tr: ({ children }) => <tr>{children}</tr>,
-          th: ({ children }) => <th className="px-3 py-2 text-xs uppercase tracking-wider font-semibold text-muted-foreground">{children}</th>,
-          td: ({ children }) => <td className="px-3 py-2 text-sm text-foreground/90">{children}</td>,
-          a: ({ href, children }) => (
-            <a
-              href={href}
-              target={href?.startsWith('http') ? '_blank' : undefined}
-              rel={href?.startsWith('http') ? 'noopener noreferrer' : undefined}
-              className="text-primary underline decoration-primary/40 hover:decoration-primary font-medium transition-colors"
-            >
+          th: ({ children }) => (
+            <th className="px-3 py-2 text-xs uppercase tracking-wider font-semibold text-muted-foreground">
               {children}
-            </a>
+            </th>
           ),
+          td: ({ children }) => <td className="px-3 py-2 text-sm text-foreground/90">{children}</td>,
+          img: ({ src, alt }) => {
+            const safeSrc = sanitizeHttpUrl(typeof src === 'string' ? src : '');
+            if (!safeSrc) return null;
+            return (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={safeSrc}
+                alt={alt || 'Article visual'}
+                loading="lazy"
+                className="my-4 max-w-full h-auto rounded-xl border border-border"
+              />
+            );
+          },
+          a: ({ href, children }) => {
+            const isRelative = href?.startsWith('/') || href?.startsWith('#');
+            const safeHref = isRelative ? href : sanitizeHttpUrl(href);
+            if (!safeHref) {
+              return <span className="text-foreground underline decoration-dotted">{children}</span>;
+            }
+            const external = safeHref.startsWith('http');
+            return (
+              <a
+                href={safeHref}
+                target={external ? '_blank' : undefined}
+                rel={external ? 'noopener noreferrer' : undefined}
+                className="text-primary underline decoration-primary/40 hover:decoration-primary font-medium transition-colors"
+              >
+                {children}
+              </a>
+            );
+          },
         }}
       >
         {content}

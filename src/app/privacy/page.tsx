@@ -3,7 +3,7 @@ import { Shield } from 'lucide-react';
 import { Navbar } from '@/components/navbar';
 
 export const metadata = {
-  title: 'Privacy Policy | VeraLM',
+  title: 'Privacy Policy',
   description:
     'VeraLM Privacy Policy — EU/UK GDPR, US CCPA/CPRA, and international data protection practices for AI search and creator publishing.',
 };

@@ -3,7 +3,7 @@ import { FileCheck } from 'lucide-react';
 import { Navbar } from '@/components/navbar';
 
 export const metadata = {
-  title: 'Terms of Service | VeraLM',
+  title: 'Terms of Service',
   description:
     'VeraLM Terms of Service — AI transparency, creator licensing, Pro subscriptions, DMCA/DSA compliance, and international consumer rights.',
 };

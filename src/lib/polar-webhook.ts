@@ -39,8 +39,8 @@ export function verifyPolarWebhookSignature(
   const expectedBuf = Buffer.from(expectedBase64, 'utf8');
 
   const candidates = signature.split(' ').map((part) => {
-    const [, sigVal] = part.split(',', 2);
-    return sigVal?.trim() || '';
+    if (!part.startsWith('v1,')) return '';
+    return part.slice('v1,'.length).trim();
   });
 
   return candidates.some((candidate) => {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { eq } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { users } from '@/db/schema';
+import { isValidUuid } from '@/lib/auth/request';
 import { verifyStripeSignature } from '@/lib/stripe-webhook';
 
 type StripeObject = Record<string, unknown>;
@@ -57,7 +58,20 @@ async function updateUserSubscription(opts: {
 }) {
   const now = new Date();
 
-  if (opts.userId) {
+  if (opts.userId && isValidUuid(opts.userId)) {
+    if (opts.tier === 'free') {
+      // Never dummy-insert a new user on cancellation/deletion events
+      await db
+        .update(users)
+        .set({
+          subscriptionTier: 'free',
+          proExpiresAt: null,
+          updatedAt: now,
+        })
+        .where(eq(users.id, opts.userId));
+      return;
+    }
+
     await db
       .insert(users)
       .values({
@@ -74,7 +88,7 @@ async function updateUserSubscription(opts: {
         target: users.id,
         set: {
           subscriptionTier: opts.tier,
-          proExpiresAt: opts.proExpiresAt,
+          ...(opts.proExpiresAt ? { proExpiresAt: opts.proExpiresAt } : {}),
           ...(opts.customerId ? { stripeCustomerId: opts.customerId } : {}),
           updatedAt: now,
         },
@@ -135,6 +149,10 @@ export async function POST(request: NextRequest) {
   try {
     switch (event.type) {
       case 'checkout.session.completed': {
+        const paymentStatus = asString(obj.payment_status);
+        if (paymentStatus && paymentStatus !== 'paid' && paymentStatus !== 'no_payment_required') {
+          break;
+        }
         const userId = metadata.userId || asString(obj.client_reference_id);
         const customerId = asString(obj.customer);
         const customerDetails =
