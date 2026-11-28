@@ -15,7 +15,7 @@ import {
   verifySignedSessionCookie,
 } from '../src/lib/citation-token';
 import { safeJsonLd, sanitizeHttpUrl, slugify } from '../src/lib/utils';
-import { chunkTextWithMeta, extractCitedIndices, fuseHybridResultsRRF, prepareMarkdownWithMath } from '../src/lib/rag-utils';
+import { chunkTextWithMeta, extractCitedIndices, filterAndRenumberCitedSources, fuseHybridResultsRRF, isConversationalOrMetaQuery, prepareMarkdownWithMath } from '../src/lib/rag-utils';
 import { verifyStripeSignature } from '../src/lib/stripe-webhook';
 import { verifyPolarWebhookSignature } from '../src/lib/polar-webhook';
 import { extractArticleSlugFromPath } from '../src/lib/revenue/ga4';
@@ -265,4 +265,22 @@ test('calculateRevenueDistribution distributes subscription & API pool by citati
   assert.equal(result.totalCreatorPool, 90);
   assert.equal(result.posts[0].creatorNetEarnings, 67.5);
   assert.equal(result.posts[1].creatorNetEarnings, 22.5);
+});
+
+test('isConversationalOrMetaQuery detects greetings and identity queries without matching real topics', () => {
+  assert.equal(isConversationalOrMetaQuery('hi which model are you?'), true);
+  assert.equal(isConversationalOrMetaQuery('Hello!'), true);
+  assert.equal(isConversationalOrMetaQuery('who are you?'), true);
+  assert.equal(isConversationalOrMetaQuery('which model is better GPT-4 or Claude?'), false);
+  assert.equal(isConversationalOrMetaQuery('How does pgvector HNSW tuning work?'), false);
+});
+
+test('filterAndRenumberCitedSources drops uncited sources and renumbers sequentially', () => {
+  const rows = [{ id: 'a1' }, { id: 'a2' }, { id: 'a3' }];
+  const kept = filterAndRenumberCitedSources('Fact one [1] and fact two [3].', rows);
+  assert.equal(kept.answer, 'Fact one [1] and fact two [2].');
+  assert.deepEqual(kept.rows.map((r) => r.id), ['a1', 'a3']);
+
+  const none = filterAndRenumberCitedSources('The sources do not mention this.', rows);
+  assert.equal(none.rows.length, 0);
 });

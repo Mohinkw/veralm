@@ -199,3 +199,68 @@ export function extractCitedIndices(answer: string, totalSources: number): Set<n
   }
   return cited;
 }
+
+/**
+ * Detects pure greetings or VeraLM assistant identity/meta questions
+ * so they are answered naturally without dumping unrelated Knowledge Vault articles.
+ */
+export function isConversationalOrMetaQuery(query: string): boolean {
+  const clean = query
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s']/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!clean || clean.length > 90) return false;
+
+  const greetingOnly =
+    /^(hi|hello|hey|yo|hola|salam|assalamu\s*alaikum|good\s*(morning|afternoon|evening)|thanks|thank\s*you|ok|okay|bye|goodbye)(\s+(there|veralm|ai|bot|friend))?$/i;
+  if (greetingOnly.test(clean)) return true;
+
+  const identityPatterns = [
+    /^(?:hi|hello|hey)?\s*(?:who|what|which)\s+(?:model|ai|llm|assistant|system|bot)\s+are\s+you$/,
+    /^(?:hi|hello|hey)?\s*(?:who|what)\s+are\s+you$/,
+    /^(?:hi|hello|hey)?\s*what\s+is\s+(?:your\s+name|veralm)$/,
+    /^(?:hi|hello|hey)?\s*(?:who|which\s+company)\s+(?:made|built|created|trained)\s+you$/,
+    /^(?:hi|hello|hey)?\s*how\s+do\s+you\s+work$/,
+    /^(?:hi|hello|hey)?\s*what\s+can\s+you\s+do$/,
+  ];
+  return identityPatterns.some((re) => re.test(clean));
+}
+
+const INSUFFICIENT_SOURCES_RE =
+  /do(?:es)? not contain|don't contain|do(?:es)? not mention|doesn't cover|not (?:covered|mentioned|found|available) in|no (?:relevant )?information|couldn't locate|cannot answer/i;
+
+/**
+ * Keeps only sources actually cited in the answer and renumbers inline [n] sequentially (1..k).
+ * Drops all sources if the answer indicates the sources do not cover the question.
+ * If the answer used the vault without printing [1], preserves the primary source [1].
+ */
+export function filterAndRenumberCitedSources<T>(
+  answer: string,
+  rows: T[]
+): { answer: string; rows: T[] } {
+  if (!rows.length) return { answer, rows: [] };
+  const citedSet = extractCitedIndices(answer, rows.length);
+  if (citedSet.size === 0) {
+    if (INSUFFICIENT_SOURCES_RE.test(answer)) {
+      return { answer, rows: [] };
+    }
+    return { answer: `${answer.trimEnd()} [1]`, rows: [rows[0]] };
+  }
+
+  const orderedOld = Array.from(citedSet).sort((a, b) => a - b);
+  const oldToNew = new Map<number, number>();
+  const keptRows: T[] = [];
+  orderedOld.forEach((oldIdx, pos) => {
+    oldToNew.set(oldIdx, pos + 1);
+    keptRows.push(rows[oldIdx - 1]);
+  });
+
+  const renumbered = answer.replace(/\[(\d{1,2})\]/g, (full, numStr) => {
+    const mapped = oldToNew.get(Number(numStr));
+    return mapped ? `[${mapped}]` : full;
+  });
+
+  return { answer: renumbered, rows: keptRows };
+}

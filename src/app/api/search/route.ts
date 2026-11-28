@@ -5,6 +5,7 @@ import { executeRawSQL } from '@/db/client';
 import { generateSessionId } from '@/lib/utils';
 import { extractClientIp, isRateLimited } from '@/lib/rate-limit';
 import { rewriteFollowUpQuery, type ChatTurn } from '@/lib/ai-providers';
+import { filterAndRenumberCitedSources, isConversationalOrMetaQuery } from '@/lib/rag-utils';
 import {
   extractCitedIndices,
   lookupQueryCache,
@@ -299,18 +300,19 @@ export async function POST(request: NextRequest) {
               })
             );
 
-            const searchQuery =
-              sanitizedHistory.length > 0
+            const isMeta = isConversationalOrMetaQuery(cleanQuery);
+            const searchQuery = isMeta
+              ? cleanQuery
+              : sanitizedHistory.length > 0
                 ? await rewriteFollowUpQuery(cleanQuery, sanitizedHistory)
                 : cleanQuery;
 
-            const { vaultResults, vaultSource } = await searchKnowledgeBase(searchQuery, {
-              categorySlug,
-              deepMode,
-            });
-
-            const citations = vaultResults.map((r, i) => mapCitation(r, i, sessionId));
-            const articlesUsed = vaultResults.map((r) => mapArticle(r, sessionId));
+            const { vaultResults, vaultSource } = isMeta
+              ? { vaultResults: [], vaultSource: 'none' as const }
+              : await searchKnowledgeBase(searchQuery, {
+                  categorySlug,
+                  deepMode,
+                });
 
             controller.enqueue(
               encodeSseEvent('status', {
@@ -319,13 +321,6 @@ export async function POST(request: NextRequest) {
                   vaultResults.length > 0
                     ? `Synthesizing answer from ${vaultResults.length} verified source${vaultResults.length === 1 ? '' : 's'}...`
                     : 'Generating response...',
-              })
-            );
-            controller.enqueue(
-              encodeSseEvent('sources', {
-                citations,
-                articles_used: articlesUsed,
-                vault_source: vaultSource,
               })
             );
 
@@ -347,6 +342,21 @@ export async function POST(request: NextRequest) {
               }
             }
 
+            // Keep only sources actually cited in the answer (prevents showing irrelevant sources)
+            const filtered = filterAndRenumberCitedSources(finalAnswer, vaultResults);
+            finalAnswer = filtered.answer;
+            const citedRows = filtered.rows;
+            const citations = citedRows.map((r, i) => mapCitation(r, i, sessionId));
+            const articlesUsed = citedRows.map((r) => mapArticle(r, sessionId));
+
+            controller.enqueue(
+              encodeSseEvent('sources', {
+                citations,
+                articles_used: articlesUsed,
+                vault_source: citedRows.length > 0 ? vaultSource : 'none',
+              })
+            );
+
             const latencyMs = Date.now() - startTime;
             const queryId = await recordSearchAttribution({
               sessionId,
@@ -357,13 +367,13 @@ export async function POST(request: NextRequest) {
               modelUsed: finalModel,
               aiSource: finalAiSource,
               wasCached: false,
-              vaultResults,
+              vaultResults: citedRows,
             });
 
-            if (sanitizedHistory.length === 0 && finalAiSource === 'gemini' && vaultResults.length > 0) {
+            if (sanitizedHistory.length === 0 && finalAiSource === 'gemini' && citedRows.length > 0) {
               await storeQueryCache(cleanQuery, categorySlug, deepMode, {
                 answer: finalAnswer,
-                vaultRows: vaultResults,
+                vaultRows: citedRows,
                 vaultSource,
                 modelUsed: finalModel,
               });
@@ -377,7 +387,7 @@ export async function POST(request: NextRequest) {
                 articles_used: articlesUsed,
                 latency_ms: latencyMs,
                 was_cached: false,
-                vault_source: vaultSource,
+                vault_source: citedRows.length > 0 ? vaultSource : 'none',
                 ai_source: finalAiSource,
                 model_used: finalModel,
               })
@@ -404,21 +414,29 @@ export async function POST(request: NextRequest) {
     }
 
     // 3. Standard JSON path
-    const searchQuery =
-      sanitizedHistory.length > 0
+    const isMeta = isConversationalOrMetaQuery(cleanQuery);
+    const searchQuery = isMeta
+      ? cleanQuery
+      : sanitizedHistory.length > 0
         ? await rewriteFollowUpQuery(cleanQuery, sanitizedHistory)
         : cleanQuery;
 
-    const { vaultResults, vaultSource } = await searchKnowledgeBase(searchQuery, {
-      categorySlug,
-      deepMode,
-    });
+    const { vaultResults, vaultSource } = isMeta
+      ? { vaultResults: [], vaultSource: 'none' as const }
+      : await searchKnowledgeBase(searchQuery, {
+          categorySlug,
+          deepMode,
+        });
 
-    const { answer, aiSource, modelUsed } = await synthesizeSearchAnswer(
+    const synthesized = await synthesizeSearchAnswer(
       cleanQuery,
       vaultResults,
       { history: sanitizedHistory, regionHint, deepMode }
     );
+    const filtered = filterAndRenumberCitedSources(synthesized.answer, vaultResults);
+    const answer = filtered.answer;
+    const citedRows = filtered.rows;
+    const { aiSource, modelUsed } = synthesized;
 
     const latencyMs = Date.now() - startTime;
     const queryId = await recordSearchAttribution({
@@ -430,13 +448,13 @@ export async function POST(request: NextRequest) {
       modelUsed,
       aiSource,
       wasCached: false,
-      vaultResults,
+      vaultResults: citedRows,
     });
 
-    if (sanitizedHistory.length === 0 && aiSource === 'gemini' && vaultResults.length > 0) {
+    if (sanitizedHistory.length === 0 && aiSource === 'gemini' && citedRows.length > 0) {
       await storeQueryCache(cleanQuery, categorySlug, deepMode, {
         answer,
-        vaultRows: vaultResults,
+        vaultRows: citedRows,
         vaultSource,
         modelUsed,
       });
@@ -445,11 +463,11 @@ export async function POST(request: NextRequest) {
     const payload: SearchApiResponse = {
       ...(queryId ? { query_id: queryId } : {}),
       answer,
-      citations: vaultResults.map((r, i) => mapCitation(r, i, sessionId)),
-      articles_used: vaultResults.map((r) => mapArticle(r, sessionId)),
+      citations: citedRows.map((r, i) => mapCitation(r, i, sessionId)),
+      articles_used: citedRows.map((r) => mapArticle(r, sessionId)),
       latency_ms: latencyMs,
       was_cached: false,
-      vault_source: vaultSource,
+      vault_source: citedRows.length > 0 ? vaultSource : 'none',
       ai_source: aiSource,
       ...(modelUsed ? { model_used: modelUsed } : {}),
     };
