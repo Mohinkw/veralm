@@ -214,10 +214,11 @@ export function isConversationalOrMetaQuery(query: string): boolean {
   if (!clean || clean.length > 90) return false;
 
   const greetingOnly =
-    /^(hi|hello|hey|yo|hola|salam|assalamu\s*alaikum|good\s*(morning|afternoon|evening)|thanks|thank\s*you|ok|okay|bye|goodbye)(\s+(there|veralm|ai|bot|friend))?$/i;
+    /^(hi|hello|hey|yo|hola|salam|assalamu\s*alaikum|good\s*(morning|afternoon|evening)|thanks|thank\s*you|ok|okay|bye|goodbye)(\s+(there|veralm|ai|bot|friend))?(\s+how\s+are\s+you)?$/i;
   if (greetingOnly.test(clean)) return true;
 
   const identityPatterns = [
+    /^(?:hi|hello|hey)?\s*how\s+are\s+you(?:\s+doing)?$/,
     /^(?:hi|hello|hey)?\s*(?:who|what|which)\s+(?:model|ai|llm|assistant|system|bot)\s+are\s+you$/,
     /^(?:hi|hello|hey)?\s*(?:who|what)\s+are\s+you$/,
     /^(?:hi|hello|hey)?\s*what\s+is\s+(?:your\s+name|veralm)$/,
@@ -226,6 +227,22 @@ export function isConversationalOrMetaQuery(query: string): boolean {
     /^(?:hi|hello|hey)?\s*what\s+can\s+you\s+do$/,
   ];
   return identityPatterns.some((re) => re.test(clean));
+}
+
+/**
+ * Returns true only for genuine unanswered knowledge questions suitable as Creator Bounties.
+ */
+export function isEligibleKnowledgeBounty(topic: string): boolean {
+  const trimmed = topic.trim();
+  if (trimmed.length < 15 || trimmed.length > 180) return false;
+  if (isConversationalOrMetaQuery(trimmed)) return false;
+
+  // Reject automated QA fixtures or trailing random hex run IDs
+  if (/kestreldb|zephyrmoon/i.test(trimmed)) return false;
+  if (/\b[0-9a-f]{8}\b$/i.test(trimmed)) return false;
+
+  const words = trimmed.split(/\s+/).filter((w) => w.length >= 2);
+  return words.length >= 3;
 }
 
 const INSUFFICIENT_SOURCES_RE =

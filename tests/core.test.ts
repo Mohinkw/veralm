@@ -15,7 +15,7 @@ import {
   verifySignedSessionCookie,
 } from '../src/lib/citation-token';
 import { safeJsonLd, sanitizeHttpUrl, slugify } from '../src/lib/utils';
-import { chunkTextWithMeta, extractCitedIndices, filterAndRenumberCitedSources, fuseHybridResultsRRF, isConversationalOrMetaQuery, prepareMarkdownWithMath } from '../src/lib/rag-utils';
+import { chunkTextWithMeta, extractCitedIndices, filterAndRenumberCitedSources, fuseHybridResultsRRF, isConversationalOrMetaQuery, isEligibleKnowledgeBounty, prepareMarkdownWithMath } from '../src/lib/rag-utils';
 import { verifyStripeSignature } from '../src/lib/stripe-webhook';
 import { verifyPolarWebhookSignature } from '../src/lib/polar-webhook';
 import { extractArticleSlugFromPath } from '../src/lib/revenue/ga4';
@@ -283,4 +283,13 @@ test('filterAndRenumberCitedSources drops uncited sources and renumbers sequenti
 
   const none = filterAndRenumberCitedSources('The sources do not mention this.', rows);
   assert.equal(none.rows.length, 0);
+});
+
+test('isEligibleKnowledgeBounty excludes greetings, identity queries, and QA fixtures', () => {
+  assert.equal(isEligibleKnowledgeBounty('Hello, who are you?'), false);
+  assert.equal(isEligibleKnowledgeBounty('hey what model are you?'), false);
+  assert.equal(isEligibleKnowledgeBounty('What is VeraLM?'), false);
+  assert.equal(isEligibleKnowledgeBounty('hi how are you?'), false);
+  assert.equal(isEligibleKnowledgeBounty('KestrelDB v9.4 7420 shards 0.0319 a09166d1'), false);
+  assert.equal(isEligibleKnowledgeBounty('How to tune PostgreSQL HNSW vector indexes for recall?'), true);
 });
