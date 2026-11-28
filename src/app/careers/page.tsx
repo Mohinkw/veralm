@@ -1,45 +1,11 @@
-import { Target, Globe, DollarSign } from "lucide-react";
+import Link from "next/link";
+import { Target, Globe, DollarSign, Sparkles } from "lucide-react";
 import { Navbar } from "@/components/navbar";
 
 export const metadata = {
   title: "Careers",
-  description: "Join the VeraLM team and help build the future of verified AI knowledge.",
+  description: "Learn about VeraLM's mission and contributor opportunities.",
 };
-
-const roles = [
-  {
-    title: "Senior Full-Stack Engineer",
-    team: "Engineering",
-    location: "Remote",
-    type: "Full-time",
-    description:
-      "Own the creator portal and AI search pipeline. TypeScript, Next.js, Supabase, pgvector. You'll write code that directly pays domain experts.",
-  },
-  {
-    title: "ML Engineer — Embeddings & RAG",
-    team: "AI",
-    location: "Remote",
-    type: "Full-time",
-    description:
-      "Design our hybrid retrieval pipeline, improve citation accuracy, and maintain embedding versioning. Experience with pgvector, LangChain or similar.",
-  },
-  {
-    title: "Head of Creator Growth",
-    team: "Creator Success",
-    location: "Remote",
-    type: "Full-time",
-    description:
-      "Recruit and onboard the first 500 expert creators. Build the playbook for creator success. Prior experience growing a creator or expert community.",
-  },
-  {
-    title: "Content Quality Reviewer (Freelance)",
-    team: "Editorial",
-    location: "Remote",
-    type: "Contract",
-    description:
-      "Review submitted articles for accuracy, depth, and expertise. We're hiring domain-specific reviewers across tech, finance, medicine, and law.",
-  },
-];
 
 export default function CareersPage() {
   return (
@@ -49,11 +15,11 @@ export default function CareersPage() {
         {/* Hero */}
         <section className="border-b border-border py-16 sm:py-20 px-4 sm:px-6 text-center bg-muted/20">
           <div className="max-w-2xl mx-auto">
-            <span className="text-primary text-xs font-semibold uppercase tracking-widest">We&apos;re Hiring</span>
+            <span className="text-primary text-xs font-semibold uppercase tracking-widest">Careers</span>
             <h1 className="text-3xl sm:text-4xl font-bold mt-3 mb-4 tracking-tight">Build the future of verified AI knowledge</h1>
             <p className="text-muted-foreground text-base sm:text-lg leading-relaxed">
-              VeraLM is a small, mission-driven team. We believe the best AI answers should come from real experts — not
-              scraped content. Join us.
+              VeraLM is a focused, mission-driven team. We believe the best AI answers should come from real experts — not
+              uncredited scraping.
             </p>
           </div>
         </section>
@@ -73,8 +39,8 @@ export default function CareersPage() {
             },
             {
               icon: DollarSign,
-              title: "Competitive equity",
-              desc: "Early employees share meaningfully in VeraLM's upside. Transparent salary bands.",
+              title: "Creator-aligned",
+              desc: "Up to 90% of net revenue goes directly to verified contributors whose work powers AI answers.",
             },
           ].map((v) => {
             const Icon = v.icon;
@@ -90,44 +56,39 @@ export default function CareersPage() {
           })}
         </section>
 
-        {/* Roles */}
+        {/* Open Roles Empty State */}
         <section className="max-w-4xl mx-auto px-4 sm:px-6 pb-16">
           <h2 className="text-2xl font-bold mb-6">Open Roles</h2>
-          <div className="space-y-4">
-            {roles.map((role) => (
-              <div
-                key={role.title}
-                className="bg-card border border-border rounded-xl p-6 hover:border-primary/40 transition-colors shadow-sm"
+          <div className="bg-card border border-border rounded-xl p-8 text-center shadow-sm space-y-4">
+            <p className="text-base font-semibold text-foreground">
+              There are currently no open staff or engineering vacancies.
+            </p>
+            <p className="text-sm text-muted-foreground max-w-xl mx-auto">
+              If you are a domain expert, researcher, or technical writer, you can contribute verified articles directly to the Knowledge Vault and earn ongoing royalties.
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+              <Link
+                href="/creators"
+                className="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors"
               >
-                <div className="flex flex-wrap items-start justify-between gap-4 mb-3">
-                  <div>
-                    <h3 className="text-lg font-bold text-foreground">{role.title}</h3>
-                    <div className="flex gap-3 mt-1 flex-wrap items-center">
-                      <span className="text-xs bg-primary/10 text-primary px-2.5 py-0.5 rounded-full font-medium">
-                        {role.team}
-                      </span>
-                      <span className="text-xs text-muted-foreground">{role.location}</span>
-                      <span className="text-xs text-muted-foreground">{role.type}</span>
-                    </div>
-                  </div>
-                  <a
-                    href={`mailto:admin@veralm.com?subject=${encodeURIComponent(`Application: ${role.title}`)}`}
-                    className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium shrink-0 transition-colors"
-                  >
-                    Apply
-                  </a>
-                </div>
-                <p className="text-muted-foreground text-sm leading-relaxed">{role.description}</p>
-              </div>
-            ))}
+                <Sparkles className="h-4 w-4" />
+                Earn as a Creator
+              </Link>
+              <Link
+                href="/contact"
+                className="inline-flex items-center border border-border hover:bg-accent text-foreground px-5 py-2.5 rounded-lg text-sm font-medium transition-colors"
+              >
+                Contact Us
+              </Link>
+            </div>
           </div>
         </section>
 
-        {/* General application */}
+        {/* General inquiries */}
         <section className="bg-muted/30 border-t border-border py-12 text-center px-4 sm:px-6">
-          <h2 className="text-2xl font-bold mb-3">Don&apos;t see your role?</h2>
+          <h2 className="text-2xl font-bold mb-3">Want to reach our team?</h2>
           <p className="text-muted-foreground mb-6">
-            We&apos;re always looking for exceptional people. Send us a note.
+            For partnerships or future opportunities, feel free to send us a note.
           </p>
           <a
             href="mailto:admin@veralm.com"
