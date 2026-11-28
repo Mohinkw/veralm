@@ -18,9 +18,21 @@ type RevenueRow = {
   status: string;
 };
 
+type PendingBatchPayout = {
+  earningId: string;
+  creatorId: string;
+  displayName: string;
+  revenuePeriod: string;
+  netEarnings: string;
+  methodType: string;
+  accountReference: string | null;
+  currency: string;
+};
+
 export default function AdminRevenuePage() {
   const { user, isLoading: authLoading } = useAccount();
   const [rows, setRows] = useState<RevenueRow[]>([]);
+  const [pendingPayouts, setPendingPayouts] = useState<PendingBatchPayout[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -40,13 +52,14 @@ export default function AdminRevenuePage() {
   const fetchRevenue = useCallback(async () => {
     try {
       const token = await getToken();
-      const res = await fetch('/api/admin/revenue', {
+      const res = await fetch('/api/admin/revenue?pending_batch=1', {
         headers: { Authorization: `Bearer ${token}` },
         cache: 'no-store',
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || 'Failed to load revenue.');
       setRows(body.revenue || []);
+      setPendingPayouts(body.pendingPayouts || []);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load revenue.');
@@ -88,6 +101,59 @@ export default function AdminRevenuePage() {
       await fetchRevenue();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleExportCsv = () => {
+    if (pendingPayouts.length === 0) return;
+    const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
+    const header = ['Earning ID', 'Creator', 'Period', 'Rail', 'Reference', 'Amount USD', 'Currency'].join(',');
+    const lines = pendingPayouts.map((p) =>
+      [
+        esc(p.earningId),
+        esc(p.displayName),
+        esc(p.revenuePeriod),
+        esc(p.methodType),
+        esc(p.accountReference || ''),
+        Number(p.netEarnings || 0).toFixed(2),
+        esc(p.currency || 'USD'),
+      ].join(',')
+    );
+    const blob = new Blob([[header, ...lines].join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `veralm-payout-batch-${currentMonth}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleSettleBatch = async () => {
+    if (pendingPayouts.length === 0) return;
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const token = await getToken();
+      const res = await fetch('/api/admin/revenue', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          action: 'mark_batch_settled',
+          earningIds: pendingPayouts.map((p) => p.earningId),
+        }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Batch settlement failed.');
+      setMessage(`Marked ${body.settledCount} queued non-Stripe payout(s) as settled.`);
+      await fetchRevenue();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Batch settlement failed.');
     } finally {
       setBusy(false);
     }
@@ -136,14 +202,35 @@ export default function AdminRevenuePage() {
             <h1 className="text-2xl sm:text-3xl font-bold">Revenue Management</h1>
             <p className="text-muted-foreground mt-1 text-sm">Monthly distribution history and pending payouts</p>
           </div>
-          <button
-            type="button"
-            onClick={handleRunDistribution}
-            disabled={busy}
-            className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium self-start sm:self-auto"
-          >
-            {busy ? 'Running...' : 'Run Payout Distribution'}
-          </button>
+          <div className="flex flex-wrap gap-2 self-start sm:self-auto">
+            {pendingPayouts.length > 0 && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleExportCsv}
+                  className="bg-secondary hover:bg-secondary/80 text-secondary-foreground px-3.5 py-2 rounded-lg text-sm font-medium"
+                >
+                  Export Non-Stripe CSV ({pendingPayouts.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSettleBatch}
+                  disabled={busy}
+                  className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-3.5 py-2 rounded-lg text-sm font-medium"
+                >
+                  Mark Batch Settled
+                </button>
+              </>
+            )}
+            <button
+              type="button"
+              onClick={handleRunDistribution}
+              disabled={busy}
+              className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium"
+            >
+              {busy ? 'Running...' : 'Run Payout Distribution'}
+            </button>
+          </div>
         </div>
 
         {error && (

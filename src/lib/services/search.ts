@@ -1,7 +1,15 @@
+import crypto from 'crypto';
 import { executeRawSQL } from '@/db/client';
-import { generateChatAnswer, generateEmbedding, hasAnyAI, type ChatTurn } from '@/lib/ai-providers';
+import {
+  generateChatAnswer,
+  generateChatAnswerStream,
+  generateEmbedding,
+  hasAnyAI,
+  type ChatStreamChunk,
+  type ChatTurn,
+} from '@/lib/ai-providers';
 import { createCitationToken } from '@/lib/citation-token';
-import { extractCitedIndices } from '@/lib/rag-utils';
+import { extractCitedIndices, fuseHybridResultsRRF } from '@/lib/rag-utils';
 import { slugify } from '@/lib/utils';
 import type {
   FreshnessStatus,
@@ -56,41 +64,49 @@ export function mapCitation(
 ): SearchCitation {
   const slug = row.slug || slugify(row.title) || row.article_id;
   const citationToken = createCitationToken(slug, sessionId);
+  const anchor = typeof row.chunk_index === 'number' ? `#passage-${row.chunk_index}` : '';
   return {
     index: index + 1,
     article_id: row.article_id,
     article_title: row.title,
     slug,
-    url: `/articles/${slug}?token=${citationToken}`,
+    url: `/articles/${slug}?token=${citationToken}${anchor}`,
     citation_token: citationToken,
     author_name: row.author_name || 'Domain Expert',
     approved_at: row.approved_at || new Date().toISOString(),
     freshness_status: normalizeFreshness(row.freshness_status),
-    excerpt: row.excerpt || row.chunk_text?.slice(0, 200) || '',
+    excerpt: row.chunk_text?.slice(0, 260) || row.excerpt || '',
+    chunk_index: row.chunk_index ?? null,
+    verified_domain: row.verified_domain ?? null,
+    quality_score: row.composite_quality_score
+      ? Math.round(Number(row.composite_quality_score))
+      : null,
   };
 }
 
 export function mapArticle(row: SearchVaultRow, sessionId?: string): SearchArticleUsed {
   const slug = row.slug || slugify(row.title) || row.article_id;
   const citationToken = createCitationToken(slug, sessionId);
+  const anchor = typeof row.chunk_index === 'number' ? `#passage-${row.chunk_index}` : '';
   return {
     article_id: row.article_id,
     title: row.title,
     slug,
-    url: `/articles/${slug}?token=${citationToken}`,
+    url: `/articles/${slug}?token=${citationToken}${anchor}`,
     citation_token: citationToken,
     author_slug: row.author_slug || 'author',
     author_name: row.author_name || 'Domain Expert',
     approved_at: row.approved_at || new Date().toISOString(),
     freshness_status: normalizeFreshness(row.freshness_status),
     excerpt: row.excerpt || row.chunk_text?.slice(0, 200) || '',
+    chunk_index: row.chunk_index ?? null,
+    verified_domain: row.verified_domain ?? null,
+    quality_score: row.composite_quality_score
+      ? Math.round(Number(row.composite_quality_score))
+      : null,
   };
 }
 
-/**
- * Extracts significant tokens from any Unicode query to build an OR-based tsquery
- * fallback when strict-AND queries miss valid documents.
- */
 function buildOrTsQueryText(query: string): string {
   const tokens = query
     .normalize('NFKC')
@@ -126,30 +142,25 @@ function pickIlikeToken(query: string): string | null {
   return candidates[0] ?? null;
 }
 
-/**
- * Finds the most relevant passage window inside long content instead of blindly
- * cutting after the first 2,400 characters.
- */
 function extractBestWindow(content: string, query: string, maxLen = 2400): string {
-  if (!content) return '';
-  if (content.length <= maxLen) return content;
+  if (!content || content.length <= maxLen) return content;
 
-  const terms = query
-    .normalize('NFKC')
+  const tokens = query
     .toLowerCase()
     .split(/[^\p{L}\p{N}]+/u)
     .filter((t) => t.length >= 3);
 
-  const lower = content.toLowerCase();
+  if (tokens.length === 0) return content.slice(0, maxLen);
+
   let bestPos = 0;
   let bestScore = -1;
+  const step = 400;
 
-  // Slide window in 600-char steps across the article to locate highest term density
-  for (let pos = 0; pos < content.length; pos += 600) {
-    const slice = lower.slice(pos, pos + maxLen);
+  for (let pos = 0; pos < content.length; pos += step) {
+    const windowText = content.slice(pos, pos + maxLen).toLowerCase();
     let score = 0;
-    for (const term of terms) {
-      if (slice.includes(term)) score++;
+    for (const token of tokens) {
+      if (windowText.includes(token)) score++;
     }
     if (score > bestScore) {
       bestScore = score;
@@ -157,7 +168,6 @@ function extractBestWindow(content: string, query: string, maxLen = 2400): strin
     }
   }
 
-  // Align start cleanly to a paragraph/newline if shifted forward
   if (bestPos > 0) {
     const nl = content.lastIndexOf('\n', bestPos);
     if (nl >= bestPos - 250) bestPos = nl + 1;
@@ -167,27 +177,27 @@ function extractBestWindow(content: string, query: string, maxLen = 2400): strin
 }
 
 /**
- * Retrieve relevant verified articles using semantic pgvector similarity + keyword matching,
- * enforcing approved status, active license, non-withdrawn/outdated freshness, and active creator.
+ * Parallel Hybrid Search (Dense pgvector + Sparse PostgreSQL FTS merged via RRF k=60).
  */
 export async function searchKnowledgeBase(
   query: string,
-  options?: { categorySlug?: string | null; limit?: number }
+  options?: { categorySlug?: string | null; limit?: number; deepMode?: boolean }
 ): Promise<{
   vaultResults: SearchVaultRow[];
-  vaultSource: 'pgvector' | 'pg-fts' | 'demo-vault' | 'none';
+  vaultSource: 'hybrid-rrf' | 'pgvector' | 'pg-fts' | 'demo-vault' | 'none';
 }> {
-  const limit = Math.min(Math.max(options?.limit ?? 5, 1), 10);
+  const defaultLimit = options?.deepMode ? 8 : 5;
+  const limit = Math.min(Math.max(options?.limit ?? defaultLimit, 1), 10);
+  const candidateLimit = Math.max(limit * 3, 12);
   const categorySlug = options?.categorySlug?.trim() || null;
-  let vaultResults: SearchVaultRow[] = [];
-  let vaultSource: 'pgvector' | 'pg-fts' | 'demo-vault' | 'none' = 'none';
+  const trimmed = query.trim();
 
-  // Tier 1: Direct pgvector cosine similarity across indexed article chunks
-  try {
-    const embedding = await generateEmbedding(query);
-    if (embedding) {
+  const densePromise = (async (): Promise<SearchVaultRow[]> => {
+    try {
+      const embedding = await generateEmbedding(trimmed);
+      if (!embedding) return [];
       const vecLiteral = `[${embedding.join(',')}]`;
-      const params: unknown[] = [vecLiteral, limit];
+      const params: unknown[] = [vecLiteral, candidateLimit];
       const catClause = categorySlug ? `AND c.slug = $${params.push(categorySlug)}` : '';
 
       const vecSql = `
@@ -197,12 +207,14 @@ export async function searchKnowledgeBase(
             a.title,
             a.slug,
             a.excerpt,
+            ae.chunk_index,
             ae.chunk_text,
             a.approved_at,
             a.freshness_status,
             a.composite_quality_score,
             COALESCE(cp.display_name, 'Verified Contributor') AS author_name,
             COALESCE(cp.slug, 'author') AS author_slug,
+            cp.verified_domain,
             (1 - (ae.embedding <=> $1::vector))::float AS similarity
           FROM article_embeddings ae
           INNER JOIN articles a ON ae.article_id = a.id
@@ -223,92 +235,97 @@ export async function searchKnowledgeBase(
       `;
 
       const vecRes = await executeRawSQL(vecSql, params);
-      if (vecRes?.rows && vecRes.rows.length > 0) {
-        vaultResults = vecRes.rows as SearchVaultRow[];
-        vaultSource = 'pgvector';
-      }
-    }
-  } catch (err) {
-    console.warn('[Search Service] Vector search failed, falling back to PostgreSQL FTS:', err);
-  }
-
-  // Tier 2: Flexible PostgreSQL FTS (websearch + OR keyword fallback + Unicode ILIKE for non-Latin)
-  if (vaultResults.length < limit) {
-    try {
-      const trimmed = query.trim();
-      const orText = buildOrTsQueryText(trimmed);
-      if (trimmed.length > 0) {
-        const existingIds = vaultResults.map((r) => r.article_id);
-        const needed = limit - vaultResults.length;
-        const ilikeToken = pickIlikeToken(trimmed);
-
-        const params: unknown[] = [trimmed, orText || trimmed, ilikeToken, needed];
-        const catClause = categorySlug ? `AND c.slug = $${params.push(categorySlug)}` : '';
-        const excludeClause =
-          existingIds.length > 0 ? `AND NOT (a.id = ANY($${params.push(existingIds)}::uuid[]))` : '';
-
-        const ftsSql = `
-          SELECT
-            a.id AS article_id,
-            a.title,
-            a.slug,
-            a.excerpt,
-            a.content AS full_content,
-            a.approved_at,
-            a.freshness_status,
-            a.composite_quality_score,
-            COALESCE(cp.display_name, 'Verified Contributor') AS author_name,
-            COALESCE(cp.slug, 'author') AS author_slug,
-            (
-              ts_rank_cd(a.search_vector, websearch_to_tsquery('english', $1)) * 2.0 +
-              ts_rank_cd(a.search_vector, websearch_to_tsquery('english', $2))
-            ) AS rank_score
-          FROM articles a
-          LEFT JOIN creator_profiles cp ON a.creator_id = cp.id
-          LEFT JOIN categories c ON a.category_id = c.id
-          WHERE a.status = 'approved'
-            AND a.licensing_status = 'active'
-            AND a.freshness_status NOT IN ('outdated', 'withdrawn', 'superseded')
-            AND (a.withdrawal_effective_at IS NULL OR a.withdrawal_effective_at > NOW())
-            AND (cp.is_active IS NULL OR cp.is_active = true)
-            ${catClause}
-            ${excludeClause}
-            AND (
-              a.search_vector @@ websearch_to_tsquery('english', $1)
-              OR a.search_vector @@ websearch_to_tsquery('english', $2)
-              OR ($3::text IS NOT NULL AND (a.title ILIKE '%' || $3 || '%' OR a.content ILIKE '%' || $3 || '%'))
-            )
-          ORDER BY rank_score DESC, a.composite_quality_score DESC NULLS LAST, a.approved_at DESC
-          LIMIT $4;
-        `;
-
-        const dbRes = await executeRawSQL(ftsSql, params);
-        if (dbRes?.rows && dbRes.rows.length > 0) {
-          const mappedFts: SearchVaultRow[] = dbRes.rows.map((row: Record<string, unknown>) => ({
-            article_id: String(row.article_id),
-            title: String(row.title),
-            slug: typeof row.slug === 'string' ? row.slug : undefined,
-            excerpt: typeof row.excerpt === 'string' ? row.excerpt : null,
-            chunk_text: extractBestWindow(String(row.full_content || ''), trimmed, 2400),
-            approved_at: row.approved_at ? String(row.approved_at) : null,
-            freshness_status: typeof row.freshness_status === 'string' ? row.freshness_status : 'current',
-            author_name: String(row.author_name || 'Verified Contributor'),
-            author_slug: String(row.author_slug || 'author'),
-            bm25_score: Number(row.rank_score || 0),
-          }));
-
-          vaultResults = [...vaultResults, ...mappedFts];
-          if (vaultSource === 'none') {
-            vaultSource = 'pg-fts';
-          }
-        }
-      }
+      return (vecRes?.rows as SearchVaultRow[]) || [];
     } catch (err) {
-      console.warn('[Search Service] PostgreSQL FTS query failed:', err);
+      console.warn('[Search Service] Dense vector search warning:', err);
+      return [];
     }
+  })();
+
+  const sparsePromise = (async (): Promise<SearchVaultRow[]> => {
+    if (!trimmed) return [];
+    try {
+      const orText = buildOrTsQueryText(trimmed);
+      const ilikeToken = pickIlikeToken(trimmed);
+      const params: unknown[] = [trimmed, orText || trimmed, ilikeToken, candidateLimit];
+      const catClause = categorySlug ? `AND c.slug = $${params.push(categorySlug)}` : '';
+
+      const ftsSql = `
+        SELECT
+          a.id AS article_id,
+          a.title,
+          a.slug,
+          a.excerpt,
+          a.content AS full_content,
+          a.approved_at,
+          a.freshness_status,
+          a.composite_quality_score,
+          COALESCE(cp.display_name, 'Verified Contributor') AS author_name,
+          COALESCE(cp.slug, 'author') AS author_slug,
+          cp.verified_domain,
+          (
+            ts_rank_cd(a.search_vector, websearch_to_tsquery('english', $1)) * 2.0 +
+            ts_rank_cd(a.search_vector, websearch_to_tsquery('english', $2))
+          ) AS rank_score
+        FROM articles a
+        LEFT JOIN creator_profiles cp ON a.creator_id = cp.id
+        LEFT JOIN categories c ON a.category_id = c.id
+        WHERE a.status = 'approved'
+          AND a.licensing_status = 'active'
+          AND a.freshness_status NOT IN ('outdated', 'withdrawn', 'superseded')
+          AND (a.withdrawal_effective_at IS NULL OR a.withdrawal_effective_at > NOW())
+          AND (cp.is_active IS NULL OR cp.is_active = true)
+          ${catClause}
+          AND (
+            a.search_vector @@ websearch_to_tsquery('english', $1)
+            OR a.search_vector @@ websearch_to_tsquery('english', $2)
+            OR ($3::text IS NOT NULL AND (a.title ILIKE '%' || $3 || '%' OR a.content ILIKE '%' || $3 || '%'))
+          )
+        ORDER BY rank_score DESC, a.composite_quality_score DESC NULLS LAST, a.approved_at DESC
+        LIMIT $4;
+      `;
+
+      const dbRes = await executeRawSQL(ftsSql, params);
+      return (dbRes?.rows || []).map((row: Record<string, unknown>) => ({
+        article_id: String(row.article_id),
+        title: String(row.title),
+        slug: typeof row.slug === 'string' ? row.slug : undefined,
+        excerpt: typeof row.excerpt === 'string' ? row.excerpt : null,
+        chunk_text: extractBestWindow(String(row.full_content || ''), trimmed, 2400),
+        approved_at: row.approved_at ? String(row.approved_at) : null,
+        freshness_status: typeof row.freshness_status === 'string' ? row.freshness_status : 'current',
+        composite_quality_score:
+          typeof row.composite_quality_score === 'string' || typeof row.composite_quality_score === 'number'
+            ? row.composite_quality_score
+            : null,
+        author_name: String(row.author_name || 'Verified Contributor'),
+        author_slug: String(row.author_slug || 'author'),
+        verified_domain: typeof row.verified_domain === 'string' ? row.verified_domain : null,
+        bm25_score: Number(row.rank_score || 0),
+      }));
+    } catch (err) {
+      console.warn('[Search Service] Sparse FTS search warning:', err);
+      return [];
+    }
+  })();
+
+  const [denseRows, sparseRows] = await Promise.all([densePromise, sparsePromise]);
+
+  let vaultResults: SearchVaultRow[] = [];
+  let vaultSource: 'hybrid-rrf' | 'pgvector' | 'pg-fts' | 'demo-vault' | 'none' = 'none';
+
+  if (denseRows.length > 0 && sparseRows.length > 0) {
+    vaultResults = fuseHybridResultsRRF(denseRows, sparseRows, limit, 60);
+    vaultSource = 'hybrid-rrf';
+  } else if (denseRows.length > 0) {
+    vaultResults = denseRows.slice(0, limit);
+    vaultSource = 'pgvector';
+  } else if (sparseRows.length > 0) {
+    vaultResults = sparseRows.slice(0, limit);
+    vaultSource = 'pg-fts';
   }
 
-  // Tier 3: Demo vault strictly gated to non-production test environments
+  // Non-production dev demo fallback
   if (
     vaultResults.length === 0 &&
     process.env.NODE_ENV !== 'production' &&
@@ -324,38 +341,112 @@ export async function searchKnowledgeBase(
   return { vaultResults, vaultSource };
 }
 
+function buildCacheKey(query: string, categorySlug?: string | null, deepMode?: boolean): string {
+  const norm = `${query.trim().toLowerCase().replace(/\s+/g, ' ')}::${categorySlug || 'all'}::${deepMode ? 'deep' : 'std'}`;
+  return crypto.createHash('sha256').update(norm).digest('hex');
+}
+
+export interface CachedSearchPayload {
+  answer: string;
+  vaultRows: SearchVaultRow[];
+  vaultSource: 'hybrid-rrf' | 'pgvector' | 'pg-fts' | 'demo-vault' | 'none';
+  modelUsed?: string;
+}
+
+export async function lookupQueryCache(
+  query: string,
+  categorySlug?: string | null,
+  deepMode?: boolean
+): Promise<CachedSearchPayload | null> {
+  try {
+    const hash = buildCacheKey(query, categorySlug, deepMode);
+    const res = await executeRawSQL(
+      `SELECT id, cached_response, model_used
+       FROM query_cache
+       WHERE query_hash = $1 AND expires_at > NOW()
+       LIMIT 1`,
+      [hash]
+    );
+    const row = res?.rows?.[0];
+    if (!row || typeof row.cached_response !== 'string') return null;
+
+    await executeRawSQL(
+      `UPDATE query_cache SET hit_count = hit_count + 1 WHERE id = $1`,
+      [row.id]
+    ).catch(() => null);
+
+    const parsed = JSON.parse(row.cached_response);
+    if (!parsed || typeof parsed.answer !== 'string' || !Array.isArray(parsed.vaultRows)) {
+      return null;
+    }
+
+    return {
+      answer: parsed.answer,
+      vaultRows: parsed.vaultRows,
+      vaultSource: parsed.vaultSource || 'hybrid-rrf',
+      modelUsed: row.model_used || undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function storeQueryCache(
+  query: string,
+  categorySlug: string | null | undefined,
+  deepMode: boolean | undefined,
+  payload: CachedSearchPayload
+): Promise<void> {
+  try {
+    if (!payload.answer || payload.vaultRows.length === 0) return;
+    const hash = buildCacheKey(query, categorySlug, deepMode);
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const articleIds = payload.vaultRows
+      .map((r) => r.article_id)
+      .filter((id) => uuidRe.test(id));
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+    await executeRawSQL(
+      `INSERT INTO query_cache (query_hash, cached_response, articles_cited, model_used, expires_at)
+       VALUES ($1, $2, $3::uuid[], $4, $5)
+       ON CONFLICT (query_hash) DO UPDATE SET
+         cached_response = EXCLUDED.cached_response,
+         articles_cited = EXCLUDED.articles_cited,
+         model_used = EXCLUDED.model_used,
+         expires_at = EXCLUDED.expires_at,
+         hit_count = 1`,
+      [
+        hash,
+        JSON.stringify({
+          answer: payload.answer,
+          vaultRows: payload.vaultRows,
+          vaultSource: payload.vaultSource,
+        }),
+        articleIds,
+        payload.modelUsed || 'gemini',
+        expiresAt,
+      ]
+    );
+  } catch {
+    // Non-fatal cache write failure
+  }
+}
+
 function escapeSourceTag(text: string): string {
   return text.replace(/<\/verified_source>/gi, '&lt;/verified_source&gt;');
 }
 
 export { extractCitedIndices };
 
-/**
- * Synthesize an answer grounded in retrieved articles (or fall back gracefully when offline).
- */
-export async function synthesizeSearchAnswer(
+function buildSearchPrompts(
   query: string,
   vaultResults: SearchVaultRow[],
-  options?: { history?: ChatTurn[]; regionHint?: string | null }
-): Promise<{
-  answer: string;
-  aiSource: string;
-  modelUsed?: string;
-}> {
-  if (!hasAnyAI()) {
-    const fallbackAnswer = vaultResults.length
-      ? `Here are verified findings from our knowledge base on this topic:\n\n${vaultResults
-        .map(
-          (r, i) =>
-            `### ${i + 1}. ${r.title}\n*By ${r.author_name || 'Domain Expert'}*\n\n${r.chunk_text || r.excerpt || ''}`
-        )
-        .join('\n\n')}`
-      : `I couldn't locate specific verified entries matching "${query}" in our directory, and external AI services are currently connecting. Please try your question again in a moment.`;
-
-    return { answer: fallbackAnswer, aiSource: 'fallback' };
-  }
-
+  options?: { history?: ChatTurn[]; regionHint?: string | null; deepMode?: boolean }
+) {
   const regionLine = options?.regionHint ? `\nUser region context (non-PII): ${options.regionHint}` : '';
+  const deepInstruction = options?.deepMode
+    ? '\n6. Deep Synthesis Mode: Provide a comprehensive, structured multi-section breakdown comparing perspectives across all supporting sources, including tables or trade-offs where helpful.'
+    : '';
 
   if (vaultResults.length > 0) {
     const context = vaultResults
@@ -376,14 +467,10 @@ Security & Grounding Rules:
    - Broad/open-ended prompts ("describe", "explain", "how does", "compare", "overview", "guide") → provide a thorough, well-structured explanation covering all relevant details from the sources.
 3. Preserve the source's terminology, facts, and phrasing accurately. Cite supporting sources inline as [1], [2].
 4. If the retrieved sources do not answer the user's question, explicitly acknowledge what is missing rather than fabricating unsupported claims.
-5. No filler, disclaimers, or repetitive intros.${regionLine}`;
+5. No filler, disclaimers, or repetitive intros.${deepInstruction}${regionLine}`;
 
     const userPrompt = `Question: ${query}\n\nVerified Knowledge Vault Sources:\n${context}`;
-    const result = await generateChatAnswer(systemPrompt, userPrompt, 0.1, {
-      history: options?.history,
-      maxOutputTokens: 2000,
-    });
-    return { answer: result.answer, aiSource: result.source, modelUsed: result.modelUsed };
+    return { systemPrompt, userPrompt, temperature: 0.1, maxOutputTokens: options?.deepMode ? 3200 : 2000 };
   }
 
   const systemPrompt = `You are VeraLM, an AI knowledge model powered by real, human-verified creator publications—delivering grounded answers with source citations and sharing up to 90% of net revenue (after infrastructure costs; 10% platform fee) with the human experts who wrote the content.
@@ -398,9 +485,62 @@ Rules:
 3. Continue the conversation naturally using prior turns when relevant.
 4. Do not invent fake [1], [2] VeraLM vault citations when no sources were retrieved.${regionLine}`;
 
-  const result = await generateChatAnswer(systemPrompt, query, 0.2, {
+  return { systemPrompt, userPrompt: query, temperature: 0.2, maxOutputTokens: options?.deepMode ? 3200 : 2000 };
+}
+
+export async function synthesizeSearchAnswer(
+  query: string,
+  vaultResults: SearchVaultRow[],
+  options?: { history?: ChatTurn[]; regionHint?: string | null; deepMode?: boolean }
+): Promise<{
+  answer: string;
+  aiSource: string;
+  modelUsed?: string;
+}> {
+  if (!hasAnyAI()) {
+    const fallbackAnswer = vaultResults.length
+      ? `Here are verified findings from our knowledge base on this topic:\n\n${vaultResults
+          .map(
+            (r, i) =>
+              `### ${i + 1}. ${r.title}\n*By ${r.author_name || 'Domain Expert'}*\n\n${r.chunk_text || r.excerpt || ''}`
+          )
+          .join('\n\n')}`
+      : `I couldn't locate specific verified entries matching "${query}" in our directory, and external AI services are currently connecting. Please try your question again in a moment.`;
+
+    return { answer: fallbackAnswer, aiSource: 'fallback' };
+  }
+
+  const { systemPrompt, userPrompt, temperature, maxOutputTokens } = buildSearchPrompts(
+    query,
+    vaultResults,
+    options
+  );
+  const result = await generateChatAnswer(systemPrompt, userPrompt, temperature, {
     history: options?.history,
-    maxOutputTokens: 2000,
+    maxOutputTokens,
   });
   return { answer: result.answer, aiSource: result.source, modelUsed: result.modelUsed };
+}
+
+export async function* synthesizeSearchAnswerStream(
+  query: string,
+  vaultResults: SearchVaultRow[],
+  options?: { history?: ChatTurn[]; regionHint?: string | null; deepMode?: boolean }
+): AsyncGenerator<ChatStreamChunk, void, unknown> {
+  if (!hasAnyAI()) {
+    const res = await synthesizeSearchAnswer(query, vaultResults, options);
+    yield { type: 'delta', text: res.answer };
+    yield { type: 'done', answer: res.answer, modelUsed: res.modelUsed || 'none', source: res.aiSource };
+    return;
+  }
+
+  const { systemPrompt, userPrompt, temperature, maxOutputTokens } = buildSearchPrompts(
+    query,
+    vaultResults,
+    options
+  );
+  yield* generateChatAnswerStream(systemPrompt, userPrompt, temperature, {
+    history: options?.history,
+    maxOutputTokens,
+  });
 }

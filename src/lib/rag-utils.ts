@@ -148,6 +148,44 @@ export function prepareMarkdownWithMath(content: string): string {
 }
 
 /**
+ * Reciprocal Rank Fusion (RRF) merges dense vector and sparse FTS ranked lists cleanly.
+ */
+export function fuseHybridResultsRRF<T extends { article_id: string }>(
+  dense: T[],
+  sparse: T[],
+  limit = 5,
+  k = 60
+): T[] {
+  const scores = new Map<string, { item: T; score: number }>();
+
+  dense.forEach((item, rank) => {
+    const rrf = 1 / (k + rank + 1);
+    const existing = scores.get(item.article_id);
+    if (existing) {
+      existing.score += rrf;
+    } else {
+      scores.set(item.article_id, { item, score: rrf });
+    }
+  });
+
+  sparse.forEach((item, rank) => {
+    const rrf = 1 / (k + rank + 1);
+    const existing = scores.get(item.article_id);
+    if (existing) {
+      existing.score += rrf;
+      // Prefer dense chunk_text if present, otherwise keep existing
+    } else {
+      scores.set(item.article_id, { item, score: rrf });
+    }
+  });
+
+  return Array.from(scores.values())
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((entry) => entry.item);
+}
+
+/**
  * Extracts 1-based citation numbers actually referenced in the synthesized answer (`[1]`, `[2]`).
  */
 export function extractCitedIndices(answer: string, totalSources: number): Set<number> {

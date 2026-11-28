@@ -69,14 +69,28 @@ export const syncMonthlyCreatorRevenue = inngest.createFunction(
         });
       }
 
-      const result = calculateRevenueDistribution(inputs, monthlyServerCost);
+      const [existingPeriod] = await db
+        .select({ subscriptionRevenue: platformRevenue.subscriptionRevenue })
+        .from(platformRevenue)
+        .where(eq(platformRevenue.revenuePeriod, revenuePeriod))
+        .limit(1);
+      const subscriptionRevenueUsd = Math.max(
+        0,
+        Number(existingPeriod?.subscriptionRevenue ?? 0) || 0
+      );
+
+      const result = calculateRevenueDistribution(inputs, monthlyServerCost, undefined, {
+        subscriptionRevenueUsd,
+      });
+      const combinedGrossRevenue = result.totalGrossAdRevenue + result.totalSubscriptionApiRevenue;
 
       const [revRow] = await db
         .insert(platformRevenue)
         .values({
           revenuePeriod,
+          subscriptionRevenue: result.totalSubscriptionApiRevenue.toFixed(4),
           adRevenue: result.totalGrossAdRevenue.toFixed(4),
-          grossRevenue: result.totalGrossAdRevenue.toFixed(4),
+          grossRevenue: combinedGrossRevenue.toFixed(4),
           infrastructureCost: result.totalServerCost.toFixed(4),
           creatorPool: result.totalCreatorPool.toFixed(4),
           creatorPoolPct: result.creatorPoolPct.toFixed(2),
@@ -86,8 +100,9 @@ export const syncMonthlyCreatorRevenue = inngest.createFunction(
         .onConflictDoUpdate({
           target: platformRevenue.revenuePeriod,
           set: {
+            subscriptionRevenue: result.totalSubscriptionApiRevenue.toFixed(4),
             adRevenue: result.totalGrossAdRevenue.toFixed(4),
-            grossRevenue: result.totalGrossAdRevenue.toFixed(4),
+            grossRevenue: combinedGrossRevenue.toFixed(4),
             infrastructureCost: result.totalServerCost.toFixed(4),
             creatorPool: result.totalCreatorPool.toFixed(4),
             creatorPoolPct: result.creatorPoolPct.toFixed(2),

@@ -12,6 +12,7 @@ export interface PostRevenueAllocation {
   creatorId: string;
   views: number;
   grossAdRevenue: number;
+  grossCitationRevenue?: number;
   allocatedServerCost: number;
   platformFee: number;
   creatorNetEarnings: number;
@@ -32,12 +33,18 @@ export interface CreatorRevenueSummary {
 
 export interface PeriodRevenueDistribution {
   totalGrossAdRevenue: number;
+  totalSubscriptionApiRevenue: number;
   totalServerCost: number;
   totalPlatformFee: number;
   totalCreatorPool: number;
   creatorPoolPct: number;
   posts: PostRevenueAllocation[];
   creators: CreatorRevenueSummary[];
+}
+
+export interface RevenueDistributionOptions {
+  subscriptionRevenueUsd?: number;
+  apiRevenueUsd?: number;
 }
 
 export const DEFAULT_PLATFORM_FEE_RATE = 0.1; // 10% platform fee -> 90% creator pool
@@ -54,27 +61,56 @@ function round4(n: number): number {
 export function calculateRevenueDistribution(
   posts: PostRevenueInput[],
   totalServerCost: number,
-  platformFeeRate = DEFAULT_PLATFORM_FEE_RATE
+  platformFeeRate = DEFAULT_PLATFORM_FEE_RATE,
+  options?: RevenueDistributionOptions
 ): PeriodRevenueDistribution {
   const safeServerCost = Math.max(0, totalServerCost);
   const clampedFeeRate = Math.min(1, Math.max(0, platformFeeRate));
   const creatorRate = 1 - clampedFeeRate;
 
   const totalViews = posts.reduce((sum, p) => sum + Math.max(0, p.views), 0);
+  const totalCitations = posts.reduce((sum, p) => sum + Math.max(0, p.queryContributions ?? 0), 0);
   const totalGrossAdRevenue = round4(
     posts.reduce((sum, p) => sum + Math.max(0, p.grossAdRevenue), 0)
   );
+  const totalSubscriptionApiRevenue = round4(
+    Math.max(0, (options?.subscriptionRevenueUsd ?? 0) + (options?.apiRevenueUsd ?? 0))
+  );
+
+  // Split infrastructure cost proportionally between ad revenue and citation revenue pools
+  const combinedGross = totalGrossAdRevenue + totalSubscriptionApiRevenue;
+  const adServerCostPool =
+    totalSubscriptionApiRevenue <= 0
+      ? safeServerCost
+      : combinedGross > 0
+        ? safeServerCost * (totalGrossAdRevenue / combinedGross)
+        : safeServerCost;
+  const citationServerCostPool = Math.max(0, safeServerCost - adServerCostPool);
 
   const postAllocations: PostRevenueAllocation[] = posts.map((post) => {
     const views = Math.max(0, post.views);
     const gross = Math.max(0, post.grossAdRevenue);
+    const citations = Math.max(0, post.queryContributions ?? 0);
 
-    // Allocate server cost proportionally by traffic; if zero total views, split evenly
+    // Allocate ad-pool server cost proportionally by traffic
     const viewShare =
       totalViews > 0 ? views / totalViews : posts.length > 0 ? 1 / posts.length : 0;
-    const allocatedServerCost = safeServerCost * viewShare;
+    const allocatedAdServer = adServerCostPool * viewShare;
 
-    const netAfterServer = Math.max(0, gross - allocatedServerCost);
+    // Allocate Pro subscription + API grounding pool proportionally by AI citations
+    const citationShare =
+      totalCitations > 0
+        ? citations / totalCitations
+        : totalSubscriptionApiRevenue > 0 && posts.length > 0
+          ? 1 / posts.length
+          : 0;
+    const grossCitationRevenue = totalSubscriptionApiRevenue * citationShare;
+    const allocatedCitationServer = citationServerCostPool * citationShare;
+
+    const allocatedServerCost = allocatedAdServer + allocatedCitationServer;
+    const netAfterServer =
+      Math.max(0, gross - allocatedAdServer) +
+      Math.max(0, grossCitationRevenue - allocatedCitationServer);
     const platformFee = netAfterServer * clampedFeeRate;
     const creatorNetEarnings = netAfterServer * creatorRate;
 
@@ -83,6 +119,7 @@ export function calculateRevenueDistribution(
       creatorId: post.creatorId,
       views,
       grossAdRevenue: round4(gross),
+      grossCitationRevenue: round4(grossCitationRevenue),
       allocatedServerCost: round4(allocatedServerCost),
       platformFee: round4(platformFee),
       creatorNetEarnings: round4(creatorNetEarnings),
@@ -126,7 +163,7 @@ export function calculateRevenueDistribution(
     current.articleCount += 1;
     current.totalViews += alloc.views;
     current.totalQueryContributions += Math.max(0, post.queryContributions ?? 0);
-    current.grossEarnings += alloc.grossAdRevenue;
+    current.grossEarnings += alloc.grossAdRevenue + (alloc.grossCitationRevenue ?? 0);
     current.allocatedServerCost += alloc.allocatedServerCost;
     current.platformFee += alloc.platformFee;
     current.netEarnings += alloc.creatorNetEarnings;
@@ -156,6 +193,7 @@ export function calculateRevenueDistribution(
 
   return {
     totalGrossAdRevenue,
+    totalSubscriptionApiRevenue,
     totalServerCost: round4(safeServerCost),
     totalPlatformFee,
     totalCreatorPool,

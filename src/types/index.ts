@@ -366,6 +366,8 @@ export interface SearchVaultRow {
   slug?: string | null;
   author_name?: string | null;
   author_slug?: string | null;
+  verified_domain?: string | null;
+  chunk_index?: number | null;
   chunk_text?: string | null;
   excerpt?: string | null;
   freshness_status?: FreshnessStatus | string | null;
@@ -380,6 +382,9 @@ export interface SearchCitation extends Citation {
   slug: string;
   url: string;
   citation_token: string;
+  chunk_index?: number | null;
+  verified_domain?: string | null;
+  quality_score?: number | null;
 }
 
 export interface SearchArticleUsed extends ArticleCitation {
@@ -387,6 +392,9 @@ export interface SearchArticleUsed extends ArticleCitation {
   url: string;
   citation_token: string;
   excerpt: string;
+  chunk_index?: number | null;
+  verified_domain?: string | null;
+  quality_score?: number | null;
 }
 
 export interface SearchApiResponse {
@@ -396,7 +404,7 @@ export interface SearchApiResponse {
   articles_used: SearchArticleUsed[];
   latency_ms: number;
   was_cached: boolean;
-  vault_source: 'pgvector' | 'pg-fts' | 'demo-vault' | 'none';
+  vault_source: 'hybrid-rrf' | 'pgvector' | 'pg-fts' | 'demo-vault' | 'none';
   ai_source: string;
   model_used?: string;
 }

@@ -13,7 +13,7 @@ export function Navbar({ activePage }: { activePage?: string }) {
 
   return (
     <nav className="border-b border-border sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container mx-auto px-2.5 sm:px-4 h-16 flex items-center justify-between gap-1.5 sm:gap-2">
+      <div className="container mx-auto px-2 sm:px-4 h-16 flex items-center justify-between gap-1 sm:gap-2">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-1.5 sm:gap-2 font-bold text-base sm:text-xl shrink-0">
           <VeraLMLogo className="h-5 w-5 sm:h-6 sm:w-6" />
@@ -41,6 +41,16 @@ export function Navbar({ activePage }: { activePage?: string }) {
             }`}
           >
             How It Works
+          </Link>
+          <Link
+            href="/developers"
+            className={`hidden lg:inline-flex text-sm font-medium px-3 py-1.5 rounded-md transition-colors whitespace-nowrap ${
+              activePage === 'developers'
+                ? 'text-primary bg-primary/10'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+            }`}
+          >
+            API &amp; MCP
           </Link>
 
           {/* Earn as a Creator */}
@@ -94,7 +104,7 @@ export function Navbar({ activePage }: { activePage?: string }) {
             <>
               <Link
                 href="/login"
-                className="text-xs sm:text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-2 sm:px-3 py-1.5 rounded-md hover:bg-accent whitespace-nowrap"
+                className="text-xs sm:text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-1.5 sm:px-3 py-1.5 rounded-md hover:bg-accent whitespace-nowrap"
               >
                 Sign In
               </Link>

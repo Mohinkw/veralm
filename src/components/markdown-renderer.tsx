@@ -1,19 +1,108 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
+import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
+import { BookOpen, ExternalLink, ShieldCheck } from 'lucide-react';
 import { prepareMarkdownWithMath } from '@/lib/rag-utils';
 import { cn, sanitizeHttpUrl } from '@/lib/utils';
+import type { SearchCitation } from '@/types';
 
 interface MarkdownRendererProps {
   content: string;
   className?: string;
+  citations?: SearchCitation[];
 }
 
-export function MarkdownRenderer({ content, className }: MarkdownRendererProps) {
+function CitationPill({ citation, num }: { citation: SearchCitation; num: number }) {
+  const [hoverOpen, setHoverOpen] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  const open = hoverOpen || pinned;
+  return (
+    <span
+      className="relative inline-block align-baseline mx-0.5"
+      onMouseEnter={() => setHoverOpen(true)}
+      onMouseLeave={() => setHoverOpen(false)}
+    >
+      <button
+        type="button"
+        onClick={() => setPinned((v) => !v)}
+        aria-label={`Citation ${num}: ${citation.article_title}`}
+        aria-expanded={open}
+        className="inline-flex items-center justify-center min-w-[1.25rem] h-[1.15rem] px-1 rounded-full bg-primary/15 text-primary hover:bg-primary hover:text-primary-foreground text-[10px] font-bold transition-colors align-super leading-none"
+      >
+        {num}
+      </button>
+      {open && (
+        <span
+          role="dialog"
+          aria-label={`Source ${num}`}
+          className="absolute z-50 left-0 bottom-full mb-1.5 w-72 sm:w-80 p-3 rounded-xl border border-border bg-popover text-popover-foreground shadow-xl text-left block whitespace-normal"
+        >
+          <span className="flex items-center justify-between gap-2 text-[10px] font-semibold text-primary uppercase tracking-wider mb-1">
+            <span className="inline-flex items-center gap-1">
+              <ShieldCheck className="h-3 w-3" />
+              Verified Source [{num}]
+            </span>
+            {citation.quality_score != null && (
+              <span className="text-emerald-600 dark:text-emerald-400">
+                {citation.quality_score}/100
+              </span>
+            )}
+          </span>
+          <span className="block text-xs font-bold text-foreground line-clamp-2 mb-1">
+            {citation.article_title}
+          </span>
+          <span className="block text-[11px] text-muted-foreground mb-2">
+            By {citation.author_name}
+            {citation.verified_domain ? ` · ${citation.verified_domain}` : ''}
+          </span>
+          {citation.excerpt && (
+            <span className="block text-[11px] text-foreground/85 bg-muted/50 border border-border/60 rounded-lg p-2 line-clamp-3 mb-2 leading-relaxed">
+              &ldquo;{citation.excerpt}&rdquo;
+            </span>
+          )}
+          <Link
+            href={citation.url}
+            className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline"
+          >
+            <BookOpen className="h-3 w-3" />
+            <span>Read passage in full article</span>
+            <ExternalLink className="h-3 w-3" />
+          </Link>
+        </span>
+      )}
+    </span>
+  );
+}
+
+function renderInlineCitations(
+  children: React.ReactNode,
+  citations?: SearchCitation[]
+): React.ReactNode {
+  if (!citations || citations.length === 0) return children;
+  return React.Children.map(children, (child) => {
+    if (typeof child !== 'string') return child;
+    const parts = child.split(/(\[\d{1,2}\])/g);
+    if (parts.length === 1) return child;
+    return parts.map((part, idx) => {
+      const m = part.match(/^\[(\d{1,2})\]$/);
+      if (m) {
+        const num = Number(m[1]);
+        const cit = citations[num - 1];
+        if (cit) {
+          return <CitationPill key={`cit-${idx}-${num}`} citation={cit} num={num} />;
+        }
+      }
+      return part;
+    });
+  });
+}
+
+export function MarkdownRenderer({ content, className, citations }: MarkdownRendererProps) {
   if (!content) return null;
   const normalizedContent = prepareMarkdownWithMath(content);
 
@@ -45,7 +134,7 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
           ),
           p: ({ children }) => (
             <p className="mb-3.5 leading-7 text-foreground/90 last:mb-0">
-              {children}
+              {renderInlineCitations(children, citations)}
             </p>
           ),
           ul: ({ children }) => (
@@ -58,7 +147,9 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
               {children}
             </ol>
           ),
-          li: ({ children }) => <li className="leading-7 pl-1">{children}</li>,
+          li: ({ children }) => (
+            <li className="leading-7 pl-1">{renderInlineCitations(children, citations)}</li>
+          ),
           strong: ({ children }) => (
             <strong className="font-semibold text-foreground">{children}</strong>
           ),
@@ -66,7 +157,7 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
           del: ({ children }) => <del className="line-through text-muted-foreground">{children}</del>,
           blockquote: ({ children }) => (
             <blockquote className="border-l-4 border-primary/40 pl-4 py-1 my-3 italic text-muted-foreground bg-muted/20 rounded-r-lg">
-              {children}
+              {renderInlineCitations(children, citations)}
             </blockquote>
           ),
           pre: ({ children }) => (
@@ -111,7 +202,11 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
               {children}
             </th>
           ),
-          td: ({ children }) => <td className="px-3 py-2 text-sm text-foreground/90">{children}</td>,
+          td: ({ children }) => (
+            <td className="px-3 py-2 text-sm text-foreground/90">
+              {renderInlineCitations(children, citations)}
+            </td>
+          ),
           img: ({ src, alt }) => {
             const safeSrc = sanitizeHttpUrl(typeof src === 'string' ? src : '');
             if (!safeSrc) return null;

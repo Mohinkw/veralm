@@ -505,11 +505,11 @@ def run_authenticated_creator_rag_admin_lifecycle(browser: Browser, results: Dic
 
         # Reject javascript: image URL cleanly
         page.fill("#imageUrl", "javascript:alert(1)")
-        page.get_by_role("button", name="Add", exact=True).click()
+        page.get_by_role("button", name="Add URL", exact=True).click()
         bad_img_err = page.get_by_text("Image URL must start with https:// or http://").count() > 0
         # Add valid HTTPS image
         page.fill("#imageUrl", "https://veralm.com/icon.png")
-        page.get_by_role("button", name="Add", exact=True).click()
+        page.get_by_role("button", name="Add URL", exact=True).click()
         record(results, "Article editor blocks javascript: image URLs & accepts https://", bad_img_err and page.locator('img[alt="Attachment 1"]').count() == 1, f"blockedBad={bad_img_err}")
 
         article_title = f"KestrelDB v9.4 Hybrid Sharding Engine Architecture ({run_id})"
@@ -668,6 +668,13 @@ Reference documentation: [Distributed Storage Standard](https://example.org/kest
         rag_eval.append({"type": "browser_chat_factual", "passed": browser_rag_ok, "snippet": chat_body_text[:400]})
         page.screenshot(path=str(SCREENSHOT_DIR / "chat_rag_verified.png"), full_page=False)
 
+        # Interactive inline [1] citation quote popover check on streamed SSE answer
+        cit_pill = page.locator('button[aria-label^="Citation 1:"]').first
+        cit_pill.wait_for(timeout=15000)
+        cit_pill.click()
+        popover_visible = page.locator('[role="dialog"]').first.is_visible()
+        record(results, "SSE search streams answer & inline [1] citation pill opens quote popover", popover_visible)
+
         # Verify gated anonymous vs citation-token unlock using fresh incognito browser context
         anon_ctx = browser.new_context(viewport={"width": 1280, "height": 800})
         anon_page = anon_ctx.new_page()
@@ -793,12 +800,96 @@ Reference documentation: [Distributed Storage Standard](https://example.org/kest
         post_del_slugs = [a.get("slug") for a in post_del_resp.get("articles_used", [])] if isinstance(post_del_resp, dict) else []
         record(results, "Withdrawn/archived & deleted embeddings are immediately unretrievable", slug not in post_del_slugs, post_del_slugs)
 
+        # --- Phase 1-3 Enrichment Checks ---
+        # 1. /llms.txt & /api/mcp
+        llms_req = urllib.request.Request(f"{BASE_URL}/llms.txt", method="GET")
+        with urllib.request.urlopen(llms_req, timeout=15) as r:
+            llms_body = r.read().decode("utf-8", errors="replace")
+            llms_ok = r.status == 200 and "/api/v1/ground" in llms_body and "/api/mcp" in llms_body
+        record(results, "/llms.txt exposes grounding & MCP discovery metadata", llms_ok)
+
+        mcp_code, mcp_list = http_json(
+            "POST",
+            f"{BASE_URL}/api/mcp",
+            {"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+        )
+        mcp_tools = [t.get("name") for t in mcp_list.get("result", {}).get("tools", [])] if isinstance(mcp_list, dict) else []
+        mcp_call_code, mcp_call = http_json(
+            "POST",
+            f"{BASE_URL}/api/mcp",
+            {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/call",
+                "params": {"name": "query_verified_knowledge", "arguments": {"query": "pgvector HNSW", "limit": 2}},
+            },
+        )
+        mcp_ok = (
+            mcp_code == 200
+            and "query_verified_knowledge" in mcp_tools
+            and mcp_call_code == 200
+            and bool(mcp_call.get("result", {}).get("content"))
+        )
+        record(results, "/api/mcp JSON-RPC tools/list & tools/call work end-to-end", mcp_ok, mcp_tools)
+
+        # 2. /developers responsive + API key minting + /api/v1/ground (401 unauth -> 200 valid key)
+        page.set_viewport_size({"width": 320, "height": 568})
+        page.goto(f"{BASE_URL}/developers", wait_until="networkidle", timeout=30000)
+        dev_ov_320 = page.evaluate("Math.max(0, document.documentElement.scrollWidth - window.innerWidth)")
+        page.set_viewport_size({"width": 1440, "height": 900})
+        page.wait_for_timeout(200)
+        dev_ov_1440 = page.evaluate("Math.max(0, document.documentElement.scrollWidth - window.innerWidth)")
+        record(results, "/developers has 0px horizontal overflow on 320px & 1440px", dev_ov_320 == 0 and dev_ov_1440 == 0, f"320={dev_ov_320}, 1440={dev_ov_1440}")
+
+        g401, _ = http_json("POST", f"{BASE_URL}/api/v1/ground", {"query": "pgvector HNSW"})
+        k_code, k_resp = http_json(
+            "POST",
+            f"{BASE_URL}/api/developers/keys",
+            {"name": f"QA Key {run_id}"},
+            headers={"Authorization": f"Bearer {c_token}"},
+        )
+        raw_api_key = k_resp.get("rawKey") if isinstance(k_resp, dict) else None
+        g200, g_resp = (0, {})
+        if raw_api_key:
+            g200, g_resp = http_json(
+                "POST",
+                f"{BASE_URL}/api/v1/ground",
+                {"query": "pgvector HNSW", "limit": 3},
+                headers={"Authorization": f"Bearer {raw_api_key}"},
+            )
+        ground_ok = g401 == 401 and k_code == 201 and g200 == 200 and isinstance(g_resp.get("citations"), list)
+        record(results, "Developer API key minting & /api/v1/ground auth/grounding work", ground_ok, f"401={g401}, k={k_code}, 200={g200}")
+
+        # 3. Shareable Answer (/api/share -> /share/<slug>) public SSR load + 320px overflow
+        share_code, share_resp = http_json(
+            "POST",
+            f"{BASE_URL}/api/share",
+            {
+                "query": "How to tune pgvector HNSW indexes?",
+                "answer": "Use `ef_construction = 128` and `m = 16` [1].",
+                "citations": g_resp.get("citations", []) if isinstance(g_resp, dict) else [],
+            },
+        )
+        share_slug = share_resp.get("slug") if isinstance(share_resp, dict) else None
+        share_ok = False
+        sh_ov = -1
+        if share_code == 201 and share_slug:
+            page.set_viewport_size({"width": 320, "height": 568})
+            page.goto(f"{BASE_URL}/share/{share_slug}", wait_until="networkidle", timeout=30000)
+            sh_ov = page.evaluate("Math.max(0, document.documentElement.scrollWidth - window.innerWidth)")
+            share_ok = sh_ov == 0 and "How to tune pgvector HNSW indexes?" in page.inner_text("body")
+            run_pg_sql("DELETE FROM shared_answers WHERE slug = $1", [share_slug])
+        record(results, "Shareable verified answer (/share/<slug>) renders publicly with 0px mobile overflow", share_ok, f"{share_slug} ov={sh_ov}")
+
         ctx.close()
     finally:
         # Strict FK-ordered cleanup of ALL isolated test data so zero test records remain in Supabase DB
         try:
             user_ids = [u for u in (creator_user_id, admin_user_id) if u]
             if user_ids:
+                run_pg_sql("DELETE FROM api_keys WHERE user_id = ANY($1::uuid[])", [user_ids])
+                run_pg_sql("DELETE FROM conversation_messages WHERE conversation_id IN (SELECT id FROM conversations WHERE user_id = ANY($1::uuid[]))", [user_ids])
+                run_pg_sql("DELETE FROM conversations WHERE user_id = ANY($1::uuid[])", [user_ids])
                 run_pg_sql("DELETE FROM audit_log WHERE actor_id = ANY($1::uuid[])", [user_ids])
                 sq_rows = run_pg_sql(
                     "SELECT id FROM search_queries WHERE user_id = ANY($1::uuid[]) OR session_id IN ($2, $3, $4, $5)",

@@ -19,6 +19,8 @@ export default function CreatorProfilePage() {
   const [website, setWebsite] = useState('');
   const [bio, setBio] = useState('');
   const [primaryNiche, setPrimaryNiche] = useState('Technology');
+  const [verifiedDomain, setVerifiedDomain] = useState('');
+  const [verificationBadges, setVerificationBadges] = useState('');
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
@@ -58,6 +60,14 @@ export default function CreatorProfilePage() {
                 Array.isArray(p.primaryCategories) && p.primaryCategories.length > 0
                   ? p.primaryCategories.join(', ')
                   : 'Technology'
+              );
+              setVerifiedDomain(p.verifiedDomain || '');
+              setVerificationBadges(
+                typeof p.verificationBadges?.credentials === 'string'
+                  ? p.verificationBadges.credentials
+                  : Array.isArray(p.verificationBadges)
+                    ? p.verificationBadges.join(', ')
+                    : ''
               );
               setError('');
               setLoadingProfile(false);
@@ -108,6 +118,8 @@ export default function CreatorProfilePage() {
           website: website.trim(),
           bio: bio.trim(),
           primaryNiche: primaryNiche.trim(),
+          verifiedDomain: verifiedDomain.trim(),
+          verificationBadges: verificationBadges.trim(),
         }),
       });
 
@@ -265,6 +277,32 @@ export default function CreatorProfilePage() {
                   onChange={(e) => setPrimaryNiche(e.target.value)}
                   placeholder="e.g. Technology, Science, Finance"
                 />
+              </div>
+
+              <div className="grid sm:grid-cols-2 gap-4 pt-2 border-t border-border/60">
+                <div className="space-y-1.5">
+                  <label htmlFor="profile-domain" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Verified Expertise Domain (Optional)
+                  </label>
+                  <Input
+                    id="profile-domain"
+                    value={verifiedDomain}
+                    onChange={(e) => setVerifiedDomain(e.target.value)}
+                    placeholder="e.g. stanford.edu or acme-labs.io"
+                  />
+                  <p className="text-[11px] text-muted-foreground">Displayed on AI citation cards for authority attribution.</p>
+                </div>
+                <div className="space-y-1.5">
+                  <label htmlFor="profile-badges" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Credentials &amp; Badges (Comma-Separated)
+                  </label>
+                  <Input
+                    id="profile-badges"
+                    value={verificationBadges}
+                    onChange={(e) => setVerificationBadges(e.target.value)}
+                    placeholder="e.g. PhD ML, Staff Engineer, CFA"
+                  />
+                </div>
               </div>
             </div>
 

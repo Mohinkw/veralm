@@ -226,6 +226,83 @@ export async function generateChatAnswer(
   };
 }
 
+export type ChatStreamChunk =
+  | { type: "delta"; text: string }
+  | { type: "done"; answer: string; modelUsed: string; source: string };
+
+/**
+ * Streams a chat answer token-by-token using Gemini Free Tier multi-key rotation.
+ */
+export async function* generateChatAnswerStream(
+  systemPrompt: string,
+  userPrompt: string,
+  temperature = 0.1,
+  options?: GenerateChatOptions
+): AsyncGenerator<ChatStreamChunk, void, unknown> {
+  const geminiKeys = getGeminiKeys();
+  const maxOutputTokens = options?.maxOutputTokens ?? 2000;
+  const geminiHistory = toGeminiHistory(options?.history);
+
+  if (geminiKeys.length > 0) {
+    const totalKeys = geminiKeys.length;
+
+    for (let offset = 0; offset < totalKeys; offset++) {
+      const keyIndex = (currentKeyCursor + offset) % totalKeys;
+      const currentKey = geminiKeys[keyIndex];
+      const genAI = new GoogleGenerativeAI(currentKey);
+
+      for (const modelName of GEMINI_CANDIDATES) {
+        let emittedAny = false;
+        let fullText = "";
+        try {
+          const model = genAI.getGenerativeModel({
+            model: modelName,
+            generationConfig: {
+              temperature,
+              maxOutputTokens,
+            },
+            systemInstruction: systemPrompt,
+          });
+
+          const streamResult =
+            geminiHistory.length > 0
+              ? await model.startChat({ history: geminiHistory }).sendMessageStream(userPrompt)
+              : await model.generateContentStream(userPrompt);
+
+          for await (const chunk of streamResult.stream) {
+            const delta = chunk.text();
+            if (delta) {
+              emittedAny = true;
+              fullText += delta;
+              yield { type: "delta", text: delta };
+            }
+          }
+
+          if (fullText.trim()) {
+            currentKeyCursor = (keyIndex + 1) % totalKeys;
+            yield { type: "done", answer: fullText.trim(), modelUsed: modelName, source: "gemini" };
+            return;
+          }
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.warn(
+            `[AI Providers] Stream key #${keyIndex + 1} (${modelName}) failed: ${msg.slice(0, 140)}`
+          );
+          if (emittedAny && fullText.trim()) {
+            yield { type: "done", answer: fullText.trim(), modelUsed: modelName, source: "gemini" };
+            return;
+          }
+        }
+      }
+    }
+  }
+
+  const fallback =
+    "I couldn't generate an answer right now — all free AI services are temporarily reaching their rate window. Please try again in a moment.";
+  yield { type: "delta", text: fallback };
+  yield { type: "done", answer: fallback, modelUsed: "none", source: "fallback" };
+}
+
 /**
  * Generates a 1536-dimensional embedding vector using Google Gemini Free Tier (`gemini-embedding-001`)
  * with multi-key rotation, matching `vector(1536)` columns in pgvector at $0.00 spend.

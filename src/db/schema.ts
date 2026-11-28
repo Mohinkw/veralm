@@ -96,6 +96,8 @@ export const creatorProfiles = pgTable('creator_profiles', {
   identityVerified: boolean('identity_verified').default(false).notNull(),
   verificationMethod: text('verification_method'),
   verifiedAt: timestamp('verified_at', { withTimezone: true }),
+  verifiedDomain: text('verified_domain'),
+  verificationBadges: jsonb('verification_badges').$type<Record<string, string | boolean>>().default({}).notNull(),
   reputationScore: decimal('reputation_score', { precision: 5, scale: 2 }).default('0.00').notNull(),
   reputationTier: reputationTierEnum('reputation_tier').default('new').notNull(),
   totalArticlesApproved: integer('total_articles_approved').default(0).notNull(),
@@ -403,6 +405,59 @@ export const queryCache = pgTable('query_cache', {
   hashIdx: uniqueIndex('idx_cache_hash').on(table.queryHash),
   expiresIdx: index('idx_cache_expires').on(table.expiresAt),
 }));
+
+// Server-synced Conversations
+export const conversations = pgTable('conversations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  title: text('title').default('New Conversation').notNull(),
+  categorySlug: text('category_slug'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  userUpdatedIdx: index('idx_conversations_user_updated').on(table.userId, table.updatedAt),
+}));
+
+export const conversationMessages = pgTable('conversation_messages', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  conversationId: uuid('conversation_id').notNull().references(() => conversations.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  role: text('role').notNull(),
+  content: text('content').notNull(),
+  responseJson: jsonb('response_json'),
+  feedback: integer('feedback'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  convCreatedIdx: index('idx_conv_messages_conv_created').on(table.conversationId, table.createdAt),
+}));
+
+// Public Shareable Verified Answer Links
+export const sharedAnswers = pgTable('shared_answers', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  slug: text('slug').unique().notNull(),
+  queryText: text('query_text').notNull(),
+  answerText: text('answer_text').notNull(),
+  citationsJson: jsonb('citations_json').default([]).notNull(),
+  articlesJson: jsonb('articles_json').default([]).notNull(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  viewsCount: integer('views_count').default(0).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+// Developer Grounding API & MCP Server Keys
+export const apiKeys = pgTable('api_keys', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  keyPrefix: text('key_prefix').notNull(),
+  keyHash: text('key_hash').unique().notNull(),
+  tier: text('tier').default('free').notNull(),
+  monthlyQuota: integer('monthly_quota').default(1000).notNull(),
+  requestsUsed: integer('requests_used').default(0).notNull(),
+  isActive: boolean('is_active').default(true).notNull(),
+  lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
 
 // ============================================================
 // TYPE EXPORTS

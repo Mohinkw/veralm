@@ -15,7 +15,7 @@ import {
   verifySignedSessionCookie,
 } from '../src/lib/citation-token';
 import { safeJsonLd, sanitizeHttpUrl, slugify } from '../src/lib/utils';
-import { chunkTextWithMeta, extractCitedIndices, prepareMarkdownWithMath } from '../src/lib/rag-utils';
+import { chunkTextWithMeta, extractCitedIndices, fuseHybridResultsRRF, prepareMarkdownWithMath } from '../src/lib/rag-utils';
 import { verifyStripeSignature } from '../src/lib/stripe-webhook';
 import { verifyPolarWebhookSignature } from '../src/lib/polar-webhook';
 import { extractArticleSlugFromPath } from '../src/lib/revenue/ga4';
@@ -235,4 +235,34 @@ test('prepareMarkdownWithMath normalizes LaTeX delimiters while protecting curre
 
   const code = prepareMarkdownWithMath('`$50 USD and \\(x\\)` stays literal');
   assert.equal(code, '`$50 USD and \\(x\\)` stays literal');
+});
+
+test('fuseHybridResultsRRF boosts chunks appearing in both dense and sparse rankings', () => {
+  const dense = [
+    { chunk_id: 'c1', article_id: 'a1', similarity: 0.91 },
+    { chunk_id: 'c2', article_id: 'a2', similarity: 0.85 },
+  ];
+  const sparse = [
+    { chunk_id: 'c2', article_id: 'a2', similarity: 0.88 },
+    { chunk_id: 'c3', article_id: 'a3', similarity: 0.72 },
+  ];
+  const fused = fuseHybridResultsRRF(dense, sparse, 60, 5);
+  assert.equal(fused[0].chunk_id, 'c2');
+  assert.equal(fused.length, 3);
+});
+
+test('calculateRevenueDistribution distributes subscription & API pool by citation share', () => {
+  const result = calculateRevenueDistribution(
+    [
+      { articleId: 'a1', creatorId: 'c1', views: 0, grossAdRevenue: 0, queryContributions: 75, minimumPayout: 10 },
+      { articleId: 'a2', creatorId: 'c2', views: 0, grossAdRevenue: 0, queryContributions: 25, minimumPayout: 10 },
+    ],
+    20,
+    0.1,
+    { subscriptionRevenueUsd: 80, apiRevenueUsd: 40 }
+  );
+  assert.equal(result.totalSubscriptionApiRevenue, 120);
+  assert.equal(result.totalCreatorPool, 90);
+  assert.equal(result.posts[0].creatorNetEarnings, 67.5);
+  assert.equal(result.posts[1].creatorNetEarnings, 22.5);
 });

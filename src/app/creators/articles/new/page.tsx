@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -17,12 +17,18 @@ import {
   Plus,
   Trash2,
   BookOpen,
+  Upload,
+  Eye,
+  Pencil,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { MarkdownRenderer } from '@/components/markdown-renderer';
 import { calculateReadingTime, sanitizeHttpUrl } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
+
+const DRAFT_STORAGE_KEY = 'veralm:new-article-draft';
 
 interface CategoryOption {
   id: string;
@@ -48,6 +54,46 @@ export default function NewArticlePage() {
   const [content, setContent] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [images, setImages] = useState<string[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [editorMode, setEditorMode] = useState<'write' | 'split'>('write');
+  const [draftHydrated, setDraftHydrated] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Prefill from ?topic= bounty link or restore saved localStorage draft
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const topic = params.get('topic')?.trim();
+      const rawDraft = window.localStorage.getItem(DRAFT_STORAGE_KEY);
+      if (topic) {
+        setTitle(topic.slice(0, 200));
+        setContent(`## Overview\n\n<!-- Write an authoritative, well-cited guide answering: ${topic} -->\n\n`);
+      } else if (rawDraft) {
+        const parsed = JSON.parse(rawDraft);
+        if (typeof parsed.title === 'string') setTitle(parsed.title);
+        if (typeof parsed.categoryId === 'string') setCategoryId(parsed.categoryId);
+        if (typeof parsed.tags === 'string') setTags(parsed.tags);
+        if (typeof parsed.content === 'string') setContent(parsed.content);
+        if (Array.isArray(parsed.images)) setImages(parsed.images.filter((u: unknown) => typeof u === 'string'));
+      }
+    } catch {
+      // Ignore storage errors
+    } finally {
+      setDraftHydrated(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!draftHydrated) return;
+    try {
+      window.localStorage.setItem(
+        DRAFT_STORAGE_KEY,
+        JSON.stringify({ title, categoryId, tags, content, images })
+      );
+    } catch {
+      // Ignore quota errors
+    }
+  }, [draftHydrated, title, categoryId, tags, content, images]);
 
   useEffect(() => {
     let cancelled = false;
@@ -95,6 +141,37 @@ export default function NewArticlePage() {
 
   const removeImage = (index: number) => {
     setImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploading(true);
+    setError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setError('Please sign in to upload images.');
+        return;
+      }
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/creators/upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: formData,
+      });
+      const body = await res.json();
+      if (!res.ok || !body.url) {
+        throw new Error(body.error || 'Image upload failed.');
+      }
+      setImages((prev) => (prev.includes(body.url) ? prev : [...prev, body.url]));
+    } catch (err: any) {
+      setError(err?.message || 'Image upload failed.');
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   const validate = (): boolean => {
@@ -177,6 +254,11 @@ export default function NewArticlePage() {
         throw new Error(data.error || 'Failed to submit article');
       }
 
+      try {
+        window.localStorage.removeItem(DRAFT_STORAGE_KEY);
+      } catch {
+        // Ignore
+      }
       setSuccess(true);
       router.push(`/creators/articles/${data.article_id}?submitted=true`);
     } catch (err: any) {
@@ -327,7 +409,7 @@ export default function NewArticlePage() {
               <ImageIcon className="h-4 w-4 text-primary" />
               Attached Images (Optional)
             </label>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Input
                 id="imageUrl"
                 type="url"
@@ -340,11 +422,29 @@ export default function NewArticlePage() {
                   }
                 }}
                 placeholder="Paste an image URL (e.g. https://.../chart.png)"
-                className="h-10"
+                className="h-10 flex-1 min-w-[200px]"
               />
-              <Button type="button" variant="outline" size="sm" onClick={addImage} className="gap-1.5 shrink-0">
+              <Button type="button" variant="outline" size="sm" onClick={addImage} className="gap-1.5 shrink-0 h-10">
                 <Plus className="h-4 w-4" />
-                Add
+                Add URL
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={handleImageUpload}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isUploading}
+                onClick={() => fileInputRef.current?.click()}
+                className="gap-1.5 shrink-0 h-10"
+              >
+                {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                {isUploading ? 'Uploading...' : 'Upload Image'}
               </Button>
             </div>
 
@@ -386,21 +486,56 @@ export default function NewArticlePage() {
                 <FileText className="h-4 w-4 text-primary" />
                 Article Post * (Markdown Supported)
               </label>
-              <div className="text-xs font-medium text-muted-foreground">
-                <span>{wordCount} words</span>
-                <span className="mx-2">&bull;</span>
-                <span>~{readingTime} min read</span>
+              <div className="flex items-center gap-3">
+                <div className="inline-flex rounded-lg border border-border p-0.5 bg-muted/40">
+                  <button
+                    type="button"
+                    onClick={() => setEditorMode('write')}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                      editorMode === 'write' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <Pencil className="h-3 w-3" />
+                    Write
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditorMode('split')}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                      editorMode === 'split' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <Eye className="h-3 w-3" />
+                    Split Preview
+                  </button>
+                </div>
+                <div className="text-xs font-medium text-muted-foreground">
+                  <span>{wordCount} words</span>
+                  <span className="mx-2">&bull;</span>
+                  <span>~{readingTime} min read</span>
+                </div>
               </div>
             </div>
 
-            <Textarea
-              id="content"
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="Write or paste your article content here in Markdown... Use ## headings, bullet points, and code blocks."
-              rows={22}
-              className="font-mono text-sm leading-relaxed p-4 bg-background resize-y"
-            />
+            <div className={editorMode === 'split' ? 'grid lg:grid-cols-2 gap-4' : ''}>
+              <Textarea
+                id="content"
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder="Write or paste your article content here in Markdown... Use ## headings, bullet points, LaTeX math ($x^2$), and code blocks."
+                rows={22}
+                className="font-mono text-sm leading-relaxed p-4 bg-background resize-y"
+              />
+              {editorMode === 'split' && (
+                <div className="rounded-xl border border-border bg-background p-4 max-h-[520px] overflow-y-auto">
+                  {content.trim() ? (
+                    <MarkdownRenderer content={content} />
+                  ) : (
+                    <p className="text-xs text-muted-foreground italic">Live Markdown &amp; KaTeX math preview appears here as you type…</p>
+                  )}
+                </div>
+              )}
+            </div>
 
             <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 flex-wrap gap-2">
               <span>Supports Markdown headings, lists, quotes, and code blocks.</span>

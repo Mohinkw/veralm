@@ -34,38 +34,22 @@ import {
   LogIn,
   UserCheck,
   User,
+  Share2,
+  Layers,
+  Check,
 } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { useAccount } from '@/lib/account-context';
 import { MarkdownRenderer } from '@/components/markdown-renderer';
 import { ChatLoadingStatus } from '@/components/chat-loading-status';
+import type { SearchArticleUsed, SearchCitation } from '@/types';
 
 /* ─── Types ─────────────────────────────────────────────── */
-interface Citation {
-  article_id: string;
-  article_title: string;
-  slug?: string;
-  author_name: string;
-  approved_at: string;
-  freshness_status: string;
-  excerpt: string;
-}
-interface ArticleUsed {
-  article_id: string;
-  title: string;
-  slug: string;
-  url: string;
-  author_slug: string;
-  author_name: string;
-  approved_at: string;
-  freshness_status: string;
-  excerpt?: string;
-}
 interface SearchResponse {
   answer: string;
-  citations: Citation[];
-  articles_used: ArticleUsed[];
+  citations: SearchCitation[];
+  articles_used: SearchArticleUsed[];
   latency_ms: number;
   was_cached: boolean;
   query_id: string;
@@ -111,6 +95,16 @@ const SUGGESTIONS = [
   { icon: PenSquare,  label: 'Write or summarize',      query: 'Draft a concise executive briefing on AI model monetization for creators' },
 ];
 
+const FOCUS_PILLS: Array<{ slug: string | null; label: string }> = [
+  { slug: null, label: 'All Experts' },
+  { slug: 'technology', label: 'Technology' },
+  { slug: 'personal-finance', label: 'Finance' },
+  { slug: 'health-wellness', label: 'Health' },
+  { slug: 'science', label: 'Science' },
+  { slug: 'business', label: 'Business' },
+  { slug: 'education', label: 'Education' },
+];
+
 /* ─── Freshness badge ─────────────────────────────────────── */
 function freshnessColor(s: string) {
   return s === 'current'
@@ -133,6 +127,9 @@ export default function AIChatPage() {
   const [currentId, setCurrentId] = useState('');
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [streamStatus, setStreamStatus] = useState('');
+  const [deepMode, setDeepMode] = useState(false);
+  const [sharedMap, setSharedMap] = useState<Record<string, string>>({});
   const [listening, setListening] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -145,9 +142,37 @@ export default function AIChatPage() {
   const messagesRef = useRef<Message[]>([]);
   messagesRef.current = messages;
 
-  // Load stored convs whenever auth user changes + open sidebar by default on desktop (>= 1024px)
+  // Load local convs + sync server conversations when signed in
   useEffect(() => {
     setConvs(loadConvs(user.id));
+    if (!user.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { supabase } = await import('@/lib/supabase');
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
+        const res = await fetch('/api/conversations', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          cache: 'no-store',
+        });
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (Array.isArray(data.conversations) && data.conversations.length > 0 && !cancelled) {
+          setConvs((prev) => {
+            const seen = new Set(data.conversations.map((c: StoredConv) => c.id));
+            const merged = [...data.conversations, ...prev.filter((c) => !seen.has(c.id))].slice(0, 60);
+            saveConvs(merged, user.id);
+            return merged;
+          });
+        }
+      } catch {
+        // Non-fatal fallback to localStorage
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [user.id]);
 
   useEffect(() => {
@@ -222,14 +247,17 @@ export default function AIChatPage() {
         { id: asstId, role: 'assistant', content: '', sourcesOpen: false },
       ]);
       setLoading(true);
+      setStreamStatus(deepMode ? 'Running deep hybrid search...' : 'Searching verified Knowledge Vault...');
 
       try {
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        let accessToken: string | undefined;
         if (typeof window !== 'undefined') {
           try {
             const { supabase } = await import('@/lib/supabase');
             const { data: { session } } = await supabase.auth.getSession();
             if (session?.access_token) {
+              accessToken = session.access_token;
               headers['Authorization'] = `Bearer ${session.access_token}`;
             }
           } catch {
@@ -238,24 +266,117 @@ export default function AIChatPage() {
         }
 
         const cat = categoryOverride !== undefined ? categoryOverride : activeCategory;
-        const res = await fetch('/api/chat', {
+        const res = await fetch('/api/search?stream=1', {
           method: 'POST',
           headers,
           body: JSON.stringify({
             query: queryText.trim(),
             session_id: sessionId,
             history: priorHistory,
+            deep_mode: deepMode,
+            stream: true,
             ...(cat ? { category: cat } : {}),
           }),
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to generate response');
 
-        setMessages(prev =>
-          prev.map(m =>
-            m.id === asstId ? { ...m, content: data.answer, response: data } : m
-          )
-        );
+        const contentType = res.headers.get('content-type') || '';
+        let finalPayload: SearchResponse | undefined;
+        let finalText = '';
+
+        if (contentType.includes('text/event-stream') && res.body) {
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const blocks = buffer.split('\n\n');
+            buffer = blocks.pop() || '';
+
+            for (const block of blocks) {
+              const lines = block.split('\n');
+              let evName = 'message';
+              let evData = '';
+              for (const line of lines) {
+                if (line.startsWith('event:')) evName = line.slice(6).trim();
+                else if (line.startsWith('data:')) evData += line.slice(5).trim();
+              }
+              if (!evData) continue;
+              const parsed = JSON.parse(evData);
+
+              if (evName === 'status' && parsed.label) {
+                setStreamStatus(parsed.label);
+              } else if (evName === 'sources') {
+                setMessages(prev =>
+                  prev.map(m =>
+                    m.id === asstId
+                      ? {
+                          ...m,
+                          response: {
+                            answer: finalText,
+                            citations: parsed.citations || [],
+                            articles_used: parsed.articles_used || [],
+                            latency_ms: 0,
+                            was_cached: false,
+                            query_id: '',
+                          },
+                        }
+                      : m
+                  )
+                );
+              } else if (evName === 'delta' && parsed.text) {
+                finalText += parsed.text;
+                setMessages(prev =>
+                  prev.map(m => (m.id === asstId ? { ...m, content: finalText } : m))
+                );
+              } else if (evName === 'done') {
+                finalText = parsed.answer || finalText;
+                finalPayload = parsed as SearchResponse;
+                setMessages(prev =>
+                  prev.map(m =>
+                    m.id === asstId ? { ...m, content: finalText, response: finalPayload } : m
+                  )
+                );
+              } else if (evName === 'error') {
+                throw new Error(parsed.error || 'Failed to generate response');
+              }
+            }
+          }
+        } else {
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Failed to generate response');
+          finalText = data.answer;
+          finalPayload = data;
+          setMessages(prev =>
+            prev.map(m =>
+              m.id === asstId ? { ...m, content: data.answer, response: data } : m
+            )
+          );
+        }
+
+        // Sync completed conversation to PostgreSQL when signed in
+        if (accessToken && finalText && currentId) {
+          const nextMsgs = [
+            ...priorHistory.map((h, i) => ({ id: `h-${i}`, role: h.role, content: h.content })),
+            { id: userId, role: 'user', content: queryText },
+            { id: asstId, role: 'assistant', content: finalText, response: finalPayload },
+          ];
+          fetch('/api/conversations', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({
+              id: currentId,
+              title: (messagesRef.current[0]?.content || queryText).slice(0, 60),
+              categorySlug: cat || null,
+              messages: nextMsgs,
+            }),
+          }).catch(() => null);
+        }
       } catch (err: any) {
         setMessages(prev =>
           prev.map(m =>
@@ -266,9 +387,10 @@ export default function AIChatPage() {
         );
       } finally {
         setLoading(false);
+        setStreamStatus('');
       }
     },
-    [loading, sessionId, activeCategory]
+    [loading, sessionId, activeCategory, deepMode, currentId]
   );
 
   const handleVoiceInput = () => {
@@ -355,6 +477,40 @@ export default function AIChatPage() {
       prev.map(m => (m.id === msgId ? { ...m, sourcesOpen: !m.sourcesOpen } : m))
     );
 
+  const shareAnswer = async (msg: Message, msgIndex: number) => {
+    const prevUser = messages
+      .slice(0, msgIndex)
+      .reverse()
+      .find((m) => m.role === 'user');
+    const qText = prevUser?.content || 'VeraLM Verified Answer';
+    try {
+      const res = await fetch('/api/share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: qText,
+          answer: msg.content,
+          citations: msg.response?.citations || [],
+          articles_used: msg.response?.articles_used || [],
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.url) return;
+      const fullUrl = `${window.location.origin}${data.url}`;
+      await navigator.clipboard.writeText(fullUrl).catch(() => null);
+      setSharedMap((prev) => ({ ...prev, [msg.id]: data.url }));
+      setTimeout(() => {
+        setSharedMap((prev) => {
+          const copy = { ...prev };
+          delete copy[msg.id];
+          return copy;
+        });
+      }, 3500);
+    } catch {
+      // ignore share failures
+    }
+  };
+
   const isEmpty = messages.length === 0;
 
   return (
@@ -435,9 +591,21 @@ export default function AIChatPage() {
           {convs.length > 0 && (
             <button
               type="button"
-              onClick={() => {
+              onClick={async () => {
                 setConvs([]);
                 localStorage.removeItem(chatStorageKey(user.id));
+                if (user.id) {
+                  try {
+                    const { supabase } = await import('@/lib/supabase');
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (session?.access_token) {
+                      await fetch('/api/conversations?all=1', {
+                        method: 'DELETE',
+                        headers: { Authorization: `Bearer ${session.access_token}` },
+                      });
+                    }
+                  } catch {}
+                }
               }}
               className="text-xs px-2 py-1 text-muted-foreground hover:text-foreground"
             >
@@ -793,6 +961,42 @@ export default function AIChatPage() {
                 </div>
               </form>
 
+              {/* Prompt Focus & Deep Synthesis Controls */}
+              <div className="flex flex-wrap items-center justify-center gap-1.5">
+                {FOCUS_PILLS.map((pill) => {
+                  const active = activeCategory === pill.slug;
+                  return (
+                    <button
+                      key={pill.label}
+                      type="button"
+                      onClick={() => setActiveCategory(pill.slug)}
+                      className={cn(
+                        'px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors',
+                        active
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-card border-border text-muted-foreground hover:text-foreground'
+                      )}
+                    >
+                      {pill.label}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => setDeepMode((v) => !v)}
+                  aria-pressed={deepMode}
+                  className={cn(
+                    'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-colors',
+                    deepMode
+                      ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/40'
+                      : 'bg-card border-border text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  <Layers className="h-3 w-3" />
+                  Deep Synthesis
+                </button>
+              </div>
+
               {/* Prompt Suggestion Chips */}
               <div className="flex flex-wrap gap-2 justify-center pt-2">
                 {SUGGESTIONS.map(({ icon: Icon, label, query }) => (
@@ -826,7 +1030,7 @@ export default function AIChatPage() {
             {/* Scrollable Chat Area */}
             <div className="flex-1 overflow-y-auto pt-16 pb-4">
               <div className="max-w-3xl mx-auto px-4 py-4 space-y-6">
-                {messages.map(msg => (
+                {messages.map((msg, msgIndex) => (
                   <div key={msg.id}>
                     {/* User Message */}
                     {msg.role === 'user' && (
@@ -847,7 +1051,15 @@ export default function AIChatPage() {
                         <div className="flex-1 min-w-0">
                           {/* Loading state */}
                           {!msg.content && !msg.error && (
-                            <ChatLoadingStatus />
+                            <div className="space-y-2">
+                              {streamStatus && (
+                                <div className="inline-flex items-center gap-1.5 text-xs font-medium text-primary">
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                  <span>{streamStatus}</span>
+                                </div>
+                              )}
+                              <ChatLoadingStatus />
+                            </div>
                           )}
 
                           {/* Error state */}
@@ -861,7 +1073,10 @@ export default function AIChatPage() {
                           {msg.content && (
                             <>
                               <div className="text-sm leading-7 text-foreground">
-                                <MarkdownRenderer content={msg.content} />
+                                <MarkdownRenderer
+                                  content={msg.content}
+                                  citations={msg.response?.citations}
+                                />
                               </div>
 
                               {/* Action Bar */}
@@ -879,6 +1094,25 @@ export default function AIChatPage() {
                                 >
                                   <Copy className="h-3.5 w-3.5" />
                                   <span>{msg.copied ? 'Copied' : 'Copy'}</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => shareAnswer(msg, msgIndex)}
+                                  aria-label="Share verified answer"
+                                  className={cn(
+                                    'inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs transition-colors',
+                                    sharedMap[msg.id]
+                                      ? 'text-primary font-medium'
+                                      : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                                  )}
+                                >
+                                  {sharedMap[msg.id] ? (
+                                    <Check className="h-3.5 w-3.5" />
+                                  ) : (
+                                    <Share2 className="h-3.5 w-3.5" />
+                                  )}
+                                  <span>{sharedMap[msg.id] ? 'Link copied!' : 'Share'}</span>
                                 </button>
 
                                 {msg.response && (
@@ -1057,14 +1291,29 @@ export default function AIChatPage() {
                   </div>
                 </form>
 
-                <div className="flex items-center justify-between px-2 text-[11px] text-muted-foreground">
-                  <button
-                    onClick={newChat}
-                    className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
-                  >
-                    <RotateCcw className="h-3 w-3" />
-                    New chat
-                  </button>
+                <div className="flex items-center justify-between gap-2 px-2 text-[11px] text-muted-foreground flex-wrap">
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={newChat}
+                      className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+                    >
+                      <RotateCcw className="h-3 w-3" />
+                      New chat
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeepMode((v) => !v)}
+                      aria-pressed={deepMode}
+                      className={cn(
+                        'inline-flex items-center gap-1 transition-colors',
+                        deepMode ? 'text-amber-600 dark:text-amber-400 font-semibold' : 'hover:text-foreground'
+                      )}
+                    >
+                      <Layers className="h-3 w-3" />
+                      Deep Synthesis {deepMode ? 'On' : 'Off'}
+                    </button>
+                  </div>
                   <span>
                     VeraLM delivers grounded answers.{' '}
                     <Link href="/creators/apply" className="text-primary hover:underline">

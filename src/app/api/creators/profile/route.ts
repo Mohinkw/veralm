@@ -18,6 +18,8 @@ export async function GET(request: NextRequest) {
         bio: creatorProfiles.bio,
         websiteUrl: creatorProfiles.websiteUrl,
         primaryCategories: creatorProfiles.primaryCategories,
+        verifiedDomain: creatorProfiles.verifiedDomain,
+        verificationBadges: creatorProfiles.verificationBadges,
         reputationScore: creatorProfiles.reputationScore,
         reputationTier: creatorProfiles.reputationTier,
         totalArticlesApproved: creatorProfiles.totalArticlesApproved,
@@ -56,6 +58,31 @@ export async function PATCH(request: NextRequest) {
     const bio = typeof body.bio === 'string' ? body.bio.trim() : '';
     const rawWebsite = typeof body.website === 'string' ? body.website.trim() : '';
     const primaryNiche = typeof body.primaryNiche === 'string' ? body.primaryNiche.trim() : '';
+    const rawDomain = typeof body.verifiedDomain === 'string' ? body.verifiedDomain.trim().toLowerCase() : '';
+    const rawBadges = Array.isArray(body.verificationBadges)
+      ? body.verificationBadges
+      : typeof body.verificationBadges === 'string'
+        ? body.verificationBadges.split(',')
+        : [];
+    const badgesList = rawBadges
+      .map((b) => (typeof b === 'string' ? b.trim() : ''))
+      .filter((b) => b.length > 0 && b.length <= 40)
+      .slice(0, 6);
+    const verificationBadges: Record<string, string | boolean> = badgesList.length > 0
+      ? { credentials: badgesList.join(', ') }
+      : {};
+
+    let verifiedDomain: string | null = null;
+    if (rawDomain) {
+      const cleaned = rawDomain.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+      if (!/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(cleaned) || cleaned.length > 120) {
+        return NextResponse.json(
+          { error: 'Verified domain must be a valid hostname (e.g. stanford.edu).' },
+          { status: 400 }
+        );
+      }
+      verifiedDomain = cleaned;
+    }
 
     if (!displayName || displayName.length > 100) {
       return NextResponse.json({ error: 'Display name is required (max 100 chars).' }, { status: 400 });
@@ -90,6 +117,8 @@ export async function PATCH(request: NextRequest) {
         bio: bio || null,
         websiteUrl: safeWebsite,
         primaryCategories: categoriesArr,
+        verifiedDomain,
+        verificationBadges,
         updatedAt: new Date(),
       })
       .where(eq(creatorProfiles.id, auth.creatorId))

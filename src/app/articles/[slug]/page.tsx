@@ -508,7 +508,7 @@ export default async function ArticlePreviewPage({ params, searchParams }: Props
                 </div>
 
                 {/* Markdown Content */}
-                <article className="prose dark:prose-invert max-w-none">
+                <article id="passage-0" className="prose dark:prose-invert max-w-none scroll-mt-24">
                   <MarkdownRenderer content={fullContent} />
                 </article>
 

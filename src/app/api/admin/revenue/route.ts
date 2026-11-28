@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray, ne } from 'drizzle-orm';
 import { db } from '@/db/client';
-import { auditLog, platformRevenue } from '@/db/schema';
+import {
+  auditLog,
+  creatorEarnings,
+  creatorPayoutMethods,
+  creatorProfiles,
+  platformRevenue,
+} from '@/db/schema';
 import { requireAdmin } from '@/lib/admin/auth';
-import { parseJsonObject } from '@/lib/auth/request';
+import { isValidUuid, parseJsonObject } from '@/lib/auth/request';
 import { executeCreatorPayouts } from '@/lib/revenue/payouts';
 
 export async function GET(request: NextRequest) {
@@ -17,8 +23,46 @@ export async function GET(request: NextRequest) {
       .orderBy(desc(platformRevenue.revenuePeriod))
       .limit(36);
 
+    let pendingPayouts: Array<{
+      earningId: string;
+      creatorId: string;
+      displayName: string;
+      revenuePeriod: string;
+      netEarnings: string;
+      methodType: string;
+      accountReference: string | null;
+      currency: string;
+    }> = [];
+
+    if (request.nextUrl.searchParams.get('pending_batch') === '1') {
+      pendingPayouts = await db
+        .select({
+          earningId: creatorEarnings.id,
+          creatorId: creatorEarnings.creatorId,
+          displayName: creatorProfiles.displayName,
+          revenuePeriod: creatorEarnings.revenuePeriod,
+          netEarnings: creatorEarnings.creatorNetEarnings,
+          methodType: creatorPayoutMethods.methodType,
+          accountReference: creatorPayoutMethods.accountIdentifier,
+          currency: creatorPayoutMethods.currency,
+        })
+        .from(creatorEarnings)
+        .innerJoin(creatorProfiles, eq(creatorEarnings.creatorId, creatorProfiles.id))
+        .innerJoin(
+          creatorPayoutMethods,
+          and(
+            eq(creatorPayoutMethods.creatorId, creatorProfiles.id),
+            eq(creatorPayoutMethods.isDefault, true),
+            ne(creatorPayoutMethods.methodType, 'stripe_connect')
+          )
+        )
+        .where(eq(creatorEarnings.status, 'pending_payout'))
+        .orderBy(desc(creatorEarnings.revenuePeriod))
+        .limit(200);
+    }
+
     return NextResponse.json(
-      { revenue: rows },
+      { revenue: rows, pendingPayouts },
       { headers: { 'Cache-Control': 'private, no-store' } }
     );
   } catch (err) {
@@ -49,6 +93,31 @@ export async function POST(request: NextRequest) {
         actorId: auth.account.id,
       });
       return NextResponse.json({ summary });
+    }
+
+    if (body.action === 'mark_batch_settled') {
+      const rawIds = Array.isArray(body.earningIds)
+        ? body.earningIds.filter((id): id is string => typeof id === 'string' && isValidUuid(id))
+        : [];
+      if (rawIds.length === 0) {
+        return NextResponse.json({ error: 'earningIds must contain at least one valid ID.' }, { status: 400 });
+      }
+      const settled = await db
+        .update(creatorEarnings)
+        .set({ status: 'paid', paidAt: new Date() })
+        .where(and(inArray(creatorEarnings.id, rawIds), eq(creatorEarnings.status, 'pending_payout')))
+        .returning({ id: creatorEarnings.id });
+
+      await db.insert(auditLog).values({
+        actorId: auth.account.id,
+        actorRole: auth.account.role,
+        action: 'admin.payout_batch_settled',
+        entityType: 'creator_earnings',
+        entityId: settled[0]?.id ?? null,
+        metadata: { count: settled.length, earningIds: settled.map((s) => s.id) },
+      });
+
+      return NextResponse.json({ settledCount: settled.length });
     }
 
     const revenuePeriod = typeof body.revenuePeriod === 'string' ? body.revenuePeriod.trim() : '';

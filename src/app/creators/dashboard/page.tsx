@@ -38,9 +38,16 @@ type Article = {
   categories: { name: string } | null;
 };
 
+type BountyItem = {
+  topic: string;
+  count: number;
+  lastAskedAt: string | null;
+};
+
 export default function CreatorDashboardPage() {
   const { user, isLoading: authLoading } = useAccount();
   const [articles, setArticles] = useState<Article[]>([]);
+  const [bounties, setBounties] = useState<BountyItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -59,10 +66,22 @@ export default function CreatorDashboardPage() {
           return;
         }
 
-        const response = await fetch('/api/creators/articles?page=0&status=all', {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-          cache: 'no-store',
-        });
+        const [response, bountiesRes] = await Promise.all([
+          fetch('/api/creators/articles?page=0&status=all', {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+            cache: 'no-store',
+          }),
+          fetch('/api/creators/bounties', {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+            cache: 'no-store',
+          }).catch(() => null),
+        ]);
+        if (bountiesRes?.ok) {
+          const bData = await bountiesRes.json().catch(() => null);
+          if (!cancelled && Array.isArray(bData?.bounties)) {
+            setBounties(bData.bounties);
+          }
+        }
         if (response.ok) {
           const data = await response.json();
           if (!cancelled) {
@@ -209,6 +228,43 @@ export default function CreatorDashboardPage() {
               <p className="text-xs text-muted-foreground mt-1">Monthly automatic payouts</p>
             </div>
           </div>
+
+          {bounties.length > 0 && (
+            <div className="bg-card border border-primary/20 rounded-2xl p-5 shadow-sm space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h2 className="text-base font-bold flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    Open Knowledge Bounties
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    Real user questions with no verified Knowledge Vault coverage yet. Publish an authoritative answer to capture 100% of early citations.
+                  </p>
+                </div>
+              </div>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {bounties.slice(0, 6).map((b) => (
+                  <div
+                    key={b.topic}
+                    className="p-3.5 rounded-xl border border-border bg-background/70 flex flex-col justify-between gap-2.5"
+                  >
+                    <div>
+                      <div className="text-xs font-semibold text-foreground line-clamp-2">{b.topic}</div>
+                      <div className="text-[11px] text-muted-foreground mt-1">
+                        {b.count} unanswered {b.count === 1 ? 'query' : 'queries'} (30d)
+                      </div>
+                    </div>
+                    <Link
+                      href={`/creators/articles/new?topic=${encodeURIComponent(b.topic)}`}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                    >
+                      Claim &amp; Write Answer <ArrowUpRight className="h-3.5 w-3.5" />
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* 2-Column Split: Recent Query Contributions & My Articles */}
           <div className="grid lg:grid-cols-5 gap-8">
