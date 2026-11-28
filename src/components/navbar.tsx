@@ -24,31 +24,28 @@ export function Navbar({ activePage }: { activePage?: string }) {
         <div className="flex items-center gap-1 sm:gap-2 min-w-0">
           <Link
             href="/"
-            className={`hidden md:inline-flex text-sm font-medium px-3 py-1.5 rounded-md transition-colors whitespace-nowrap ${
-              activePage === 'chat' || activePage === 'search'
-                ? 'text-primary bg-primary/10'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-            }`}
+            className={`hidden md:inline-flex text-sm font-medium px-3 py-1.5 rounded-md transition-colors whitespace-nowrap ${activePage === 'chat' || activePage === 'search'
+              ? 'text-primary bg-primary/10'
+              : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+              }`}
           >
             AI Model
           </Link>
           <Link
             href="/about"
-            className={`hidden md:inline-flex text-sm font-medium px-3 py-1.5 rounded-md transition-colors whitespace-nowrap ${
-              activePage === 'about'
-                ? 'text-primary bg-primary/10'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-            }`}
+            className={`hidden md:inline-flex text-sm font-medium px-3 py-1.5 rounded-md transition-colors whitespace-nowrap ${activePage === 'about'
+              ? 'text-primary bg-primary/10'
+              : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+              }`}
           >
             How It Works
           </Link>
           <Link
             href="/developers"
-            className={`hidden lg:inline-flex text-sm font-medium px-3 py-1.5 rounded-md transition-colors whitespace-nowrap ${
-              activePage === 'developers'
-                ? 'text-primary bg-primary/10'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-            }`}
+            className={`hidden lg:inline-flex text-sm font-medium px-3 py-1.5 rounded-md transition-colors whitespace-nowrap ${activePage === 'developers'
+              ? 'text-primary bg-primary/10'
+              : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+              }`}
           >
             API &amp; MCP
           </Link>
@@ -56,11 +53,10 @@ export function Navbar({ activePage }: { activePage?: string }) {
           {/* Earn as a Creator */}
           <Link
             href={user.isLoggedIn ? '/creators/dashboard' : '/creators'}
-            className={`inline-flex items-center gap-1 text-xs sm:text-sm font-semibold px-2 sm:px-3 py-1.5 rounded-md transition-colors whitespace-nowrap ${
-              activePage === 'creators'
-                ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'
-                : 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10'
-            }`}
+            className={`inline-flex items-center gap-1 text-xs sm:text-sm font-semibold px-2 sm:px-3 py-1.5 rounded-md transition-colors whitespace-nowrap ${activePage === 'creators'
+              ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'
+              : 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10'
+              }`}
             title="Earn as a Creator — dashboard, articles, earnings & more"
           >
             <TrendingUp className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />

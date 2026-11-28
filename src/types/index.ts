@@ -405,6 +405,4 @@ export interface SearchApiResponse {
   latency_ms: number;
   was_cached: boolean;
   vault_source: 'hybrid-rrf' | 'pgvector' | 'pg-fts' | 'demo-vault' | 'none';
-  ai_source: string;
-  model_used?: string;
 }

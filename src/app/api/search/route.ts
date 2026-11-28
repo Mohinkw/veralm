@@ -162,16 +162,16 @@ export async function POST(request: NextRequest) {
 
     const sanitizedHistory: ChatTurn[] = Array.isArray(history)
       ? history
-          .filter(
-            (m): m is ChatTurn =>
-              Boolean(m) &&
-              typeof m === 'object' &&
-              ((m as ChatTurn).role === 'user' || (m as ChatTurn).role === 'assistant') &&
-              typeof (m as ChatTurn).content === 'string' &&
-              (m as ChatTurn).content.trim().length > 0
-          )
-          .slice(-8)
-          .map((m) => ({ role: m.role, content: m.content.trim().slice(0, 2000) }))
+        .filter(
+          (m): m is ChatTurn =>
+            Boolean(m) &&
+            typeof m === 'object' &&
+            ((m as ChatTurn).role === 'user' || (m as ChatTurn).role === 'assistant') &&
+            typeof (m as ChatTurn).content === 'string' &&
+            (m as ChatTurn).content.trim().length > 0
+        )
+        .slice(-8)
+        .map((m) => ({ role: m.role, content: m.content.trim().slice(0, 2000) }))
       : [];
 
     const rawSessionId =
@@ -255,8 +255,6 @@ export async function POST(request: NextRequest) {
                   latency_ms: latencyMs,
                   was_cached: true,
                   vault_source: cached.vaultSource,
-                  ai_source: 'cache',
-                  model_used: cached.modelUsed,
                 })
               );
               controller.close();
@@ -279,8 +277,6 @@ export async function POST(request: NextRequest) {
           latency_ms: latencyMs,
           was_cached: true,
           vault_source: cached.vaultSource,
-          ai_source: 'cache',
-          ...(cached.modelUsed ? { model_used: cached.modelUsed } : {}),
         };
         return NextResponse.json(cachedPayload);
       }
@@ -310,9 +306,9 @@ export async function POST(request: NextRequest) {
             const { vaultResults, vaultSource } = isMeta
               ? { vaultResults: [], vaultSource: 'none' as const }
               : await searchKnowledgeBase(searchQuery, {
-                  categorySlug,
-                  deepMode,
-                });
+                categorySlug,
+                deepMode,
+              });
 
             controller.enqueue(
               encodeSseEvent('status', {
@@ -388,8 +384,6 @@ export async function POST(request: NextRequest) {
                 latency_ms: latencyMs,
                 was_cached: false,
                 vault_source: citedRows.length > 0 ? vaultSource : 'none',
-                ai_source: finalAiSource,
-                model_used: finalModel,
               })
             );
           } catch (err) {
@@ -424,9 +418,9 @@ export async function POST(request: NextRequest) {
     const { vaultResults, vaultSource } = isMeta
       ? { vaultResults: [], vaultSource: 'none' as const }
       : await searchKnowledgeBase(searchQuery, {
-          categorySlug,
-          deepMode,
-        });
+        categorySlug,
+        deepMode,
+      });
 
     const synthesized = await synthesizeSearchAnswer(
       cleanQuery,
@@ -468,8 +462,6 @@ export async function POST(request: NextRequest) {
       latency_ms: latencyMs,
       was_cached: false,
       vault_source: citedRows.length > 0 ? vaultSource : 'none',
-      ai_source: aiSource,
-      ...(modelUsed ? { model_used: modelUsed } : {}),
     };
 
     return NextResponse.json(payload);
