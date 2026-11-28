@@ -2,8 +2,10 @@ import type { Metadata, Viewport } from 'next';
 import { Inter, JetBrains_Mono, Noto_Sans_Bengali } from 'next/font/google';
 import Script from 'next/script';
 import '@/styles/globals.css';
+import 'katex/dist/katex.min.css';
 import { ThemeProvider } from '@/components/theme-provider';
 import { AccountProvider } from '@/lib/account-context';
+import { AdSenseScript } from '@/components/adsense-script';
 import { getSiteUrl, safeJsonLd } from '@/lib/utils';
 
 const inter = Inter({
@@ -140,14 +142,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <head>
         {adsenseClientId && (
-          <>
-            <meta name="google-adsense-account" content={adsenseClientId} />
-            <script
-              async
-              src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsenseClientId}`}
-              crossOrigin="anonymous"
-            />
-          </>
+          <meta name="google-adsense-account" content={adsenseClientId} />
         )}
         <script
           type="application/ld+json"
@@ -163,6 +158,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         >
           <AccountProvider>
             {children}
+            <AdSenseScript clientId={adsenseClientId} />
           </AccountProvider>
         </ThemeProvider>
         {gaMeasurementId && (

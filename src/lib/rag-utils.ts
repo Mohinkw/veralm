@@ -105,6 +105,49 @@ export function chunkText(text: string, chunkSize = 1800, overlap = 200): string
 }
 
 /**
+ * Normalizes LaTeX math delimiters (\(...\), \[...\]) while shielding standalone prose
+ * currency ranges (e.g. "$50 USD and $89/year") from remark-math single-dollar parsing.
+ */
+export function prepareMarkdownWithMath(content: string): string {
+  if (!content) return '';
+
+  const segments = content.split(/(```[\s\S]*?```|`[^`\n]+`)/g);
+  return segments
+    .map((segment, idx) => {
+      // Leave fenced and inline code untouched
+      if (idx % 2 === 1) return segment;
+
+      // Normalize LaTeX block & inline delimiters to Markdown $ / $$
+      let normalized = segment
+        .replace(/\\\[([\s\S]*?)\\\]/g, (_, inner: string) => `\n$$\n${inner.trim()}\n$$\n`)
+        .replace(/\\\(([^\n]*?)\\\)/g, (_, inner: string) => `$${inner.trim()}$`);
+
+      // Escape numeric currency literals (e.g. "$50.00 USD and $89/year") while keeping math like "$1 + 2 = 3$"
+      normalized = normalized.replace(
+        /(?<![\\$])\$(?!\$)(?=\d[\d,]*(?:\.\d+)?(?:[kmbKMB]\b|\/(?:yr|mo|year|month|wk|day|hr)\b|[\s,.;:!?)]|$))/g,
+        (match, offset: number, whole: string) => {
+          const rest = whole.slice(offset + 1);
+          const lineEnd = rest.indexOf('\n');
+          const lineRest = lineEnd >= 0 ? rest.slice(0, lineEnd) : rest;
+          const closeMatch = lineRest.match(/(?<!\\)\$/);
+          if (closeMatch && typeof closeMatch.index === 'number') {
+            const inner = lineRest.slice(0, closeMatch.index);
+            const hasMathExpr =
+              !/^\s|\s$/.test(inner) &&
+              (/[\\^_=+*<>|]/.test(inner) || /\s[+\-*/=]\s/.test(inner)) &&
+              !/\b(?:and|or|to|for|per|usd|eur|gbp|year|month|costs?|price|from)\b/i.test(inner);
+            if (hasMathExpr) return match;
+          }
+          return '\\$';
+        }
+      );
+
+      return normalized;
+    })
+    .join('');
+}
+
+/**
  * Extracts 1-based citation numbers actually referenced in the synthesized answer (`[1]`, `[2]`).
  */
 export function extractCitedIndices(answer: string, totalSources: number): Set<number> {

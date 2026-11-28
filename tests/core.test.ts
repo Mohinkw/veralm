@@ -15,7 +15,7 @@ import {
   verifySignedSessionCookie,
 } from '../src/lib/citation-token';
 import { safeJsonLd, sanitizeHttpUrl, slugify } from '../src/lib/utils';
-import { chunkTextWithMeta, extractCitedIndices } from '../src/lib/rag-utils';
+import { chunkTextWithMeta, extractCitedIndices, prepareMarkdownWithMath } from '../src/lib/rag-utils';
 import { verifyStripeSignature } from '../src/lib/stripe-webhook';
 import { verifyPolarWebhookSignature } from '../src/lib/polar-webhook';
 import { extractArticleSlugFromPath } from '../src/lib/revenue/ga4';
@@ -221,4 +221,18 @@ test('chunkTextWithMeta preserves headings and never splits UTF-16 surrogate pai
 test('extractCitedIndices extracts only in-range 1-based bracketed citations', () => {
   const cited = extractCitedIndices('Claim [1] is backed by [2], while [0] and [9] are ignored.', 3);
   assert.deepEqual([...cited].sort((a, b) => a - b), [1, 2]);
+});
+
+test('prepareMarkdownWithMath normalizes LaTeX delimiters while protecting currency prices', () => {
+  const currency = prepareMarkdownWithMath('Minimum payout is $50.00 USD and Pro costs $89/year.');
+  assert.equal(currency.includes('\\$50.00'), true);
+  assert.equal(currency.includes('\\$89/year'), true);
+
+  const math = prepareMarkdownWithMath('Formula \\(\\epsilon = 0.0319\\), $1 + 2 = 3$, and block:\n\\[x^2 + y^2 = z^2\\]');
+  assert.equal(math.includes('$\\epsilon = 0.0319$'), true);
+  assert.equal(math.includes('$1 + 2 = 3$'), true);
+  assert.equal(math.includes('$$\nx^2 + y^2 = z^2\n$$'), true);
+
+  const code = prepareMarkdownWithMath('`$50 USD and \\(x\\)` stays literal');
+  assert.equal(code, '`$50 USD and \\(x\\)` stays literal');
 });

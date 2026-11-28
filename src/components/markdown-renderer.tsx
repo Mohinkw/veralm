@@ -3,6 +3,9 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import { prepareMarkdownWithMath } from '@/lib/rag-utils';
 import { cn, sanitizeHttpUrl } from '@/lib/utils';
 
 interface MarkdownRendererProps {
@@ -12,11 +15,13 @@ interface MarkdownRendererProps {
 
 export function MarkdownRenderer({ content, className }: MarkdownRendererProps) {
   if (!content) return null;
+  const normalizedContent = prepareMarkdownWithMath(content);
 
   return (
     <div className={cn('markdown-body text-foreground leading-relaxed break-words', className)}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeKatex]}
         components={{
           h1: ({ children }) => (
             <h1 className="text-2xl font-bold mt-6 mb-3 text-foreground tracking-tight border-b border-border/40 pb-2">
@@ -140,7 +145,7 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
           },
         }}
       >
-        {content}
+        {normalizedContent}
       </ReactMarkdown>
     </div>
   );

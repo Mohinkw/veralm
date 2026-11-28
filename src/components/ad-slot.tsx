@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAccount } from '@/lib/account-context';
+import { isLocalHostname } from '@/components/adsense-script';
 
 interface AdSlotProps {
   slot?: string;
@@ -17,14 +18,22 @@ declare global {
 
 /**
  * Minimal, non-intrusive AdSense unit.
- * Renders nothing unless NEXT_PUBLIC_ADSENSE_CLIENT and a slot ID are configured.
+ * Renders nothing unless NEXT_PUBLIC_ADSENSE_CLIENT and a slot ID are configured on non-local hosts.
  */
 export function AdSlot({ slot, className = '', disabled = false }: AdSlotProps) {
   const { user } = useAccount();
+  const [isLocalHost, setIsLocalHost] = useState(true);
   const client = process.env.NEXT_PUBLIC_ADSENSE_CLIENT;
   const resolvedSlot = slot || process.env.NEXT_PUBLIC_ADSENSE_ARTICLE_SLOT;
   const pushedRef = useRef(false);
-  const shouldHide = !client || !resolvedSlot || disabled || user.isPro;
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setIsLocalHost(isLocalHostname(window.location.hostname));
+    }
+  }, []);
+
+  const shouldHide = isLocalHost || !client || !resolvedSlot || disabled || user.isPro;
 
   useEffect(() => {
     if (shouldHide || pushedRef.current) return;

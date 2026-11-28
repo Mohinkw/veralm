@@ -345,11 +345,11 @@ export async function synthesizeSearchAnswer(
   if (!hasAnyAI()) {
     const fallbackAnswer = vaultResults.length
       ? `Here are verified findings from our knowledge base on this topic:\n\n${vaultResults
-          .map(
-            (r, i) =>
-              `### ${i + 1}. ${r.title}\n*By ${r.author_name || 'Domain Expert'}*\n\n${r.chunk_text || r.excerpt || ''}`
-          )
-          .join('\n\n')}`
+        .map(
+          (r, i) =>
+            `### ${i + 1}. ${r.title}\n*By ${r.author_name || 'Domain Expert'}*\n\n${r.chunk_text || r.excerpt || ''}`
+        )
+        .join('\n\n')}`
       : `I couldn't locate specific verified entries matching "${query}" in our directory, and external AI services are currently connecting. Please try your question again in a moment.`;
 
     return { answer: fallbackAnswer, aiSource: 'fallback' };

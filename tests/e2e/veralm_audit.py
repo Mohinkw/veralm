@@ -630,13 +630,14 @@ Reference documentation: [Distributed Storage Standard](https://example.org/kest
         has_table = page.locator("article table").count() > 0
         has_code = page.locator("article pre code").count() > 0
         has_quote = page.locator("article blockquote").count() > 0
+        has_katex = page.locator("article .katex").count() > 0
         has_bengali = page.get_by_text("কেস্ট্রেলডিবি").count() > 0
         has_attached_img = page.locator('img[src="https://veralm.com/icon.png"]').count() > 0
         record(
             results,
-            "Article reader renders Markdown GFM table, code block, blockquote, Bengali Unicode & attached image",
-            has_table and has_code and has_quote and has_bengali and has_attached_img,
-            {"table": has_table, "code": has_code, "quote": has_quote, "bengali": has_bengali, "img": has_attached_img},
+            "Article reader renders Markdown GFM table, code block, blockquote, KaTeX math, Bengali Unicode & attached image",
+            has_table and has_code and has_quote and has_katex and has_bengali and has_attached_img,
+            {"table": has_table, "code": has_code, "quote": has_quote, "katex": has_katex, "bengali": has_bengali, "img": has_attached_img},
         )
         # Rate article via UI
         page.locator('button[aria-label="Rate 10 out of 10"]').click()
